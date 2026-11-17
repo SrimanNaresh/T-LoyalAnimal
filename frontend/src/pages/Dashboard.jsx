@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { LayoutDashboard, ArrowRight } from 'lucide-react';
 import { CardHeader } from '../components/ui.jsx';
 import { useMenu } from '../components/TopNav.jsx';
@@ -9,16 +9,34 @@ import SuperDashboard from './SuperDashboard.jsx';
 // Suite home: one card per module the signed-in login may use, listing its
 // pages (filtered by Menu Access). Module dashboards (pharmacy figures, lab
 // counts, clinic queue) are linked from here as they arrive in later phases.
+// Each role's own home screen. A login lands there when its Menu Access (and
+// the plan) allows that screen; otherwise it gets the module cards below.
+// Super Admin keeps the all-activity page.
+export const ROLE_HOME = {
+  Admin: '/clinic/dashboard/admin',
+  Doctor: '/clinic/dashboard/doctor',
+  Reception: '/clinic/dashboard/reception',
+  Pharmacist: '/pharmacy',
+  Lab: '/lab',
+};
+
 function pagesOf(nodes, trail = []) {
   return nodes.flatMap((n) => (n.submenu ? pagesOf(n.submenu, [...trail, n.label]) : [{ ...n, trail }]));
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const menu = useMenu().filter((g) => g.label !== 'Dashboard');
+  const fullMenu = useMenu();
+  const menu = fullMenu.filter((g) => g.label !== 'Dashboard');
 
-  // Super Admin only: the all-activity page. Everyone else gets the module cards.
+  // Super Admin only: the all-activity page.
   if (user?.isSuperAdmin) return <SuperDashboard />;
+
+  // Everyone else: their role's dashboard, when they may open it.
+  const home = ROLE_HOME[user?.role];
+  if (home && fullMenu.some((g) => pagesOf(g.children || []).some((p) => p.to === home))) {
+    return <Navigate to={home} replace />;
+  }
 
   return (
     <div className="space-y-4">
