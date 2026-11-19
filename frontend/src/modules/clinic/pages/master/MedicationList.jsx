@@ -40,7 +40,7 @@ export default function MedicationList() {
       <CardHeader
         icon={Pill}
         title="Medication List"
-        subtitle="Medicines received in Pharmacy › Stock In"
+        subtitle="Items from Pharmacy › Item"
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex cursor-pointer items-center gap-2 text-13 text-ink-600">
@@ -58,7 +58,7 @@ export default function MedicationList() {
       {loading ? (
         <Spinner />
       ) : rows.length === 0 ? (
-        <EmptyState message="No medicines yet. Medicines appear here once they are received through Pharmacy › Stock In." />
+        <EmptyState message="No medicines yet. Add items in Pharmacy › Item and they appear here." />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-13">

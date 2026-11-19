@@ -5,6 +5,7 @@ import { PageHeader, Toast, Spinner, EmptyState, CardHeader } from '../../../../
 import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import PatientPicker from '../../components/PatientPicker.jsx';
+import PetVitalSummary from '../../components/PetVitalSummary.jsx';
 import SearchSelect from '../../../../components/SearchSelect.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { prescriptionApi, confirmApi, clinicApi, patientApi, patientDocumentApi } from '../../api.js';
@@ -26,11 +27,11 @@ const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit'
 const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : 'unknown');
 const dateLabel = (key) => (key === 'unknown' ? 'Unknown date' : new Date(`${key}T00:00:00`).toLocaleDateString());
 const currentDateKey = () => new Date().toISOString().slice(0, 10);
-const vitalTone = (value, type) => {
-  const number = Number(value);
-  const attention = type === 'pulse' ? number < 60 || number > 100 : type === 'temperature' ? number < 36.1 || number > 37.2 : false;
-  return attention ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-100 bg-emerald-50 text-emerald-800';
-};
+const EXAMINE_TABS = [
+  { id: 'vitals', label: 'Current Vital Signs', icon: Activity },
+  { id: 'meds', label: 'Medications / Lab Test', icon: Pill },
+  { id: 'history', label: 'Patient History', icon: History },
+];
 
 export default function Prescription() {
   const location = useLocation();
@@ -53,6 +54,11 @@ export default function Prescription() {
   const [docs, setDocs] = useState([]);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [sending, setSending] = useState(false);
+  // Examine screen tabs; Notes and the Hold / Completed buttons stay visible on every tab.
+  const [tab, setTab] = useState('vitals');
+  // Left-side tabs inside Medications / Lab Test.
+  const [medsTab, setMedsTab] = useState('meds');
+  useEffect(() => { setTab('vitals'); setMedsTab('meds'); }, [selected?.PatientId]);
 
   // Two lists for today: vital-completed (Pre-Examine) and examine-completed (Billing).
   const [readyList, setReadyList] = useState([]);
@@ -62,7 +68,7 @@ export default function Prescription() {
   const [doneSearch, setDoneSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
-  useEffect(() => { linkApi.medicines().then(setMeds) /* Pharmacy Stock In items */.catch(() => setMeds([])); }, []);
+  useEffect(() => { linkApi.medicines().then(setMeds) /* Pharmacy › Item list */.catch(() => setMeds([])); }, []);
   useEffect(() => { linkApi.labTests().then((rows) => setLabTests(rows.filter((r) => r.IsActive))) /* Lab Test Master */.catch(() => setLabTests([])); }, []);
   useEffect(() => {
     clinicApi.get()
@@ -175,10 +181,6 @@ export default function Prescription() {
 
   const toggleTest = (testId) =>
     setSelectedTestIds((ids) => (ids.includes(testId) ? ids.filter((id) => id !== testId) : [...ids, testId]));
-  const toggleShowLabTests = (checked) => {
-    setShowLabTests(checked);
-    if (!checked) setSelectedTestIds([]);
-  };
   const selectedTestNames = labTests.filter((t) => selectedTestIds.includes(t.TestId)).map((t) => t.TestName);
 
   // Letter Pad print uses the same Frequency/Instructions/Duration shape the
@@ -456,28 +458,163 @@ export default function Prescription() {
           <>
             <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-brand-800">{selected.Name}</p>
-                <p className="text-xs text-brand-600">{selected.MobileNo || 'No mobile'} · ID #{selected.PatientId}</p>
+                <p className="text-sm font-semibold text-brand-800">
+                  {selected.Name || `${selected.OwnerName || 'Owner'}'s pet`}
+                  {(selected.Species || selected.Breed) && (
+                    <span className="ml-1.5 font-normal text-brand-600">({[selected.Species, selected.Breed].filter(Boolean).join(' · ')})</span>
+                  )}
+                </p>
+                <p className="text-xs text-brand-600">
+                  {selected.OwnerName ? `Owner: ${selected.OwnerName} · ` : ''}{selected.MobileNo || 'No mobile'} · ID #{selected.PatientId}
+                </p>
               </div>
               <button className="btn-secondary" onClick={() => setSelected(null)}>
-                <ArrowLeft size={16} /> Change patient
+                <ArrowLeft size={16} /> Change pet
               </button>
             </div>
 
-            {history?.vitals.filter((v) => dateKey(v.RecordedAt) === currentDateKey()).length > 0 && (
-              <div className="no-print rounded-md border border-brand-100 bg-white px-3 py-2">
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">Current Vital Signs</p>
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  {history.vitals.filter((v) => dateKey(v.RecordedAt) === currentDateKey()).map((v) => (
-                    <div key={v.VitalId} className="flex flex-wrap gap-1.5">
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">Ht {v.Height ?? '-'} cm</span>
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">Wt {v.Weight ?? '-'} kg</span>
-                      <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">BP {v.BloodPressure || '-'}</span>
-                      <span className={`rounded px-2 py-1 ${v.PulseRate == null ? 'bg-slate-100 text-slate-600' : vitalTone(v.PulseRate, 'pulse')}`}>Pulse {v.PulseRate ?? '-'} bpm</span>
-                      <span className={`rounded px-2 py-1 ${v.Temperature == null ? 'bg-slate-100 text-slate-600' : vitalTone(v.Temperature, 'temperature')}`}>Temp {v.Temperature ?? '-'} °C</span>
-                    </div>
-                  ))}
-                </div>
+            <div className="no-print flex gap-1 overflow-x-auto rounded-xl border border-ink-100 bg-white p-1" role="tablist">
+              {EXAMINE_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    tab === t.id ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <t.icon size={16} /> {t.label}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'vitals' && (
+              <div className="no-print card">
+                {todaysVitals ? (
+                  <>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+                      Current Vital Signs <span className="font-normal normal-case text-slate-400">· recorded {fmtTime(todaysVitals.RecordedAt)}</span>
+                    </p>
+                    <PetVitalSummary vital={todaysVitals} showAll />
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-400">No vital signs recorded today for this pet.</p>
+                )}
+              </div>
+            )}
+
+            {tab === 'history' && (
+              <div className="no-print card">
+                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <History size={16} /> Patient History
+                </h3>
+                {loadingHistory ? (
+                  <Spinner />
+                ) : !history ? (
+                  <p className="text-sm text-slate-400">No history available.</p>
+                ) : (
+                  <div className="space-y-5">
+                    {Object.values(
+                      [...history.vitals.map((v) => ({ ...v, recordType: 'vital', recordDate: v.RecordedAt })),
+                        ...history.prescriptions.map((p) => ({ ...p, recordType: 'prescription', recordDate: p.CreatedAt })),
+                        // Attachment-only dates (e.g. a lab report dropped off with no
+                        // visit that day) still need their own section — these entries
+                        // only exist to seed that date's group key.
+                        ...docs.map((d) => ({ recordType: 'attachment', recordDate: d.DocumentDate }))]
+                        .reduce((groups, record) => {
+                          const key = dateKey(record.recordDate);
+                          (groups[key] ||= []).push(record);
+                          return groups;
+                        }, {})
+                    )
+                      .sort((a, b) => dateKey(b[0].recordDate).localeCompare(dateKey(a[0].recordDate)))
+                      .map((records) => {
+                        const date = dateKey(records[0].recordDate);
+                        const notes = records.filter((record) => record.Notes || record.Comments);
+                        const vitals = records.filter((record) => record.recordType === 'vital');
+                        const prescriptions = records.filter((record) => record.recordType === 'prescription');
+                        const dateDocs = docs.filter((d) => dateKey(d.DocumentDate) === date);
+                        return (
+                          <section key={date} className={`rounded-lg border p-4 ${date === currentDateKey() ? 'border-brand-200 bg-brand-50/30' : 'border-slate-100'}`}>
+                            <div className="mb-4 flex flex-wrap items-center gap-2">
+                              <h4 className="text-sm font-bold text-slate-700">{dateLabel(date)}</h4>
+                              {date === currentDateKey() && <span className="badge bg-brand-100 text-brand-700">Current Date</span>}
+                            </div>
+
+                            <div className="space-y-4">
+                              <div>
+                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</p>
+                                {notes.length === 0 ? <p className="text-sm text-slate-400">No notes recorded.</p> : (
+                                  <div className="space-y-1 text-sm text-slate-600">
+                                    {notes.map((record) => <p key={`${record.recordType}-${record.VitalId || record.PrescriptionId}`}>{record.Notes || record.Comments}</p>)}
+                                  </div>
+                                )}
+                              </div>
+
+                              {date !== currentDateKey() && <div>
+                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Activity size={14} /> Vital Signs</p>
+                                {vitals.length === 0 ? <p className="text-sm text-slate-400">No vitals recorded.</p> : (
+                                  <div className="space-y-2">
+                                    {vitals.map((v) => (
+                                      <div key={v.VitalId} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                                        <span className="text-xs text-slate-400">{fmt(v.RecordedAt)}</span>
+                                        <div className="mt-2"><PetVitalSummary vital={v} /></div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>}
+
+                              <div>
+                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Pill size={14} /> Prescriptions</p>
+                                {prescriptions.length === 0 ? <p className="text-sm text-slate-400">No prescriptions recorded.</p> : (
+                                  <div className="space-y-3">
+                                    {prescriptions.map((p) => (
+                                      <div key={p.PrescriptionId} className="rounded-lg bg-slate-50 p-3">
+                                        <div className="flex items-center justify-between gap-2"><p className="text-xs text-slate-400">{fmt(p.CreatedAt)}</p>{date === currentDateKey() && <div className="flex gap-1"><button type="button" className="btn-ghost px-2 py-1" title="Edit prescription" onClick={() => { editPrescription(p); setTab('meds'); }}><Pencil size={14} /></button><button type="button" className="btn-ghost px-2 py-1 text-red-500 hover:bg-red-50" title="Delete prescription" onClick={() => deletePrescription(p)}><Trash2 size={14} /></button></div>}</div>
+                                        {p.items?.length > 0 && <ul className="mt-2 space-y-1">{p.items.map((it) => <li key={it.ItemId} className="text-sm text-slate-600">{it.MedicineName}{it.Frequency && ` — ${it.Frequency}`}{it.Instructions && ` · ${it.Instructions}`}{it.Duration && ` · ${it.Duration}`}</li>)}</ul>}
+                                        {p.NextVisitDate && <p className="mt-2 text-xs font-medium text-brand-700">Next Visit: {new Date(p.NextVisitDate).toLocaleDateString()}</p>}
+                                        {p.labTests?.length > 0 && (
+                                          <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {p.labTests.map((t) => (
+                                              <span key={t.Id} className="badge bg-violet-100 text-violet-700">{t.TestName}</span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Paperclip size={14} /> Attachments</p>
+                                {dateDocs.length === 0 ? <p className="text-sm text-slate-400">No attachments for this date.</p> : (
+                                  <div className="space-y-2">
+                                    {dateDocs.map((d) => (
+                                      <div key={d.DocumentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-slate-700">{d.FileName}</p>
+                                          <p className="text-xs text-slate-400">{d.Category || 'Document'}</p>
+                                        </div>
+                                        <div className="flex shrink-0 gap-1">
+                                          <button type="button" className="btn-ghost px-2 py-1" title="Preview" onClick={() => setPreviewDoc(d)}><Eye size={14} /></button>
+                                          <button type="button" className="btn-ghost px-2 py-1" title="Download" onClick={() => patientDocumentApi.download(d.DocumentId, d.FileName)}><Download size={14} /></button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </section>
+                        );
+                      })}
+                    {history.vitals.length === 0 && history.prescriptions.length === 0 && docs.length === 0 && <p className="text-sm text-slate-400">No records available.</p>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -495,18 +632,30 @@ export default function Prescription() {
                 />
               </div>
 
-              <div className="no-print">
-                <label className="label">Notes</label>
-                <textarea
-                  className="input"
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="General notes / advice"
-                />
-              </div>
+              <div className={tab === 'meds' ? 'mb-5 flex flex-col gap-4 md:flex-row' : 'hidden print:block'}>
+                <nav className="no-print flex shrink-0 gap-1 md:w-48 md:flex-col md:border-r md:border-ink-100 md:pr-3" aria-label="Medications and lab tests">
+                  {[
+                    { id: 'meds', label: 'Medications', icon: Pill, count: items.filter((it) => it.medicineName).length },
+                    { id: 'lab', label: 'Lab Tests', icon: TestTube, count: selectedTestIds.length },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setMedsTab(t.id)}
+                      aria-current={medsTab === t.id ? 'page' : undefined}
+                      className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors md:flex-none ${
+                        medsTab === t.id ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <t.icon size={16} />
+                      <span className="flex-1">{t.label}</span>
+                      {t.count > 0 && <span className="rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold text-white">{t.count}</span>}
+                    </button>
+                  ))}
+                </nav>
 
-              <div className="mt-5 print:mt-0">
+                <div className="min-w-0 flex-1">
+                <div className={medsTab === 'meds' ? '' : 'hidden print:block'}>
                 <div className="no-print mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-sm font-semibold text-slate-700">Medications {editingPrescription && <span className="text-xs font-normal text-brand-600">(Editing)</span>}</h3>
                   <div className="flex gap-2">
@@ -618,19 +767,19 @@ export default function Prescription() {
                   ))}
                 </div>
 
-                {labTests.length > 0 && (
-                  <div className="no-print mt-4 rounded-lg border border-violet-100 bg-violet-50/30 p-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-violet-800">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-violet-300 text-violet-600 focus:ring-violet-300"
-                        checked={showLabTests}
-                        onChange={(e) => toggleShowLabTests(e.target.checked)}
-                      />
-                      <TestTube size={14} /> Lab Tests
-                    </label>
-                    {showLabTests && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+
+                </div>
+
+                {medsTab === 'lab' && (
+                  <div className="no-print">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <TestTube size={16} /> Lab Tests
+                      {selectedTestIds.length > 0 && <span className="text-xs font-normal text-slate-400">{selectedTestIds.length} selected</span>}
+                    </h3>
+                    {labTests.length === 0 ? (
+                      <p className="text-sm text-slate-400">No lab tests set up yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                         {labTests.map((t) => (
                           <label key={t.TestId} className="flex cursor-pointer items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm text-violet-800">
                             <input
@@ -646,10 +795,26 @@ export default function Prescription() {
                     )}
                   </div>
                 )}
+                </div>
+              </div>
 
-                <div className="no-print mt-4 max-w-xs">
-                  <label className="label">Next Visit Date</label>
+              {/* Common to all tabs: Notes and Next Visit Date on one row */}
+              <div className="no-print grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                <div>
+                  <label className="label" htmlFor="examine-notes">Notes</label>
+                  <textarea
+                    id="examine-notes"
+                    className="input"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="General notes / advice"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="examine-next-visit">Next Visit Date</label>
                   <input
+                    id="examine-next-visit"
                     type="date"
                     className="input"
                     value={nextVisitDate}
@@ -669,122 +834,6 @@ export default function Prescription() {
               </div>
             </form>
 
-            <div className="no-print card">
-              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <History size={16} /> Patient History
-              </h3>
-              {loadingHistory ? (
-                <Spinner />
-              ) : !history ? (
-                <p className="text-sm text-slate-400">No history available.</p>
-              ) : (
-                <div className="space-y-5">
-                  {Object.values(
-                    [...history.vitals.map((v) => ({ ...v, recordType: 'vital', recordDate: v.RecordedAt })),
-                      ...history.prescriptions.map((p) => ({ ...p, recordType: 'prescription', recordDate: p.CreatedAt })),
-                      // Attachment-only dates (e.g. a lab report dropped off with no
-                      // visit that day) still need their own section — these entries
-                      // only exist to seed that date's group key.
-                      ...docs.map((d) => ({ recordType: 'attachment', recordDate: d.DocumentDate }))]
-                      .reduce((groups, record) => {
-                        const key = dateKey(record.recordDate);
-                        (groups[key] ||= []).push(record);
-                        return groups;
-                      }, {})
-                  )
-                    .sort((a, b) => dateKey(b[0].recordDate).localeCompare(dateKey(a[0].recordDate)))
-                    .map((records) => {
-                      const date = dateKey(records[0].recordDate);
-                      const notes = records.filter((record) => record.Notes || record.Comments);
-                      const vitals = records.filter((record) => record.recordType === 'vital');
-                      const prescriptions = records.filter((record) => record.recordType === 'prescription');
-                      const dateDocs = docs.filter((d) => dateKey(d.DocumentDate) === date);
-                      return (
-                        <section key={date} className={`rounded-lg border p-4 ${date === currentDateKey() ? 'border-brand-200 bg-brand-50/30' : 'border-slate-100'}`}>
-                          <div className="mb-4 flex flex-wrap items-center gap-2">
-                            <h4 className="text-sm font-bold text-slate-700">{dateLabel(date)}</h4>
-                            {date === currentDateKey() && <span className="badge bg-brand-100 text-brand-700">Current Date</span>}
-                          </div>
-
-                          <div className="space-y-4">
-                            <div>
-                              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</p>
-                              {notes.length === 0 ? <p className="text-sm text-slate-400">No notes recorded.</p> : (
-                                <div className="space-y-1 text-sm text-slate-600">
-                                  {notes.map((record) => <p key={`${record.recordType}-${record.VitalId || record.PrescriptionId}`}>{record.Notes || record.Comments}</p>)}
-                                </div>
-                              )}
-                            </div>
-
-                            {date !== currentDateKey() && <div>
-                              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Activity size={14} /> Vital Signs</p>
-                              {vitals.length === 0 ? <p className="text-sm text-slate-400">No vitals recorded.</p> : (
-                                <div className="space-y-2">
-                                  {vitals.map((v) => (
-                                    <div key={v.VitalId} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                                      <span className="text-xs text-slate-400">{fmt(v.RecordedAt)}</span>
-                                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                                        <span className="rounded-md border border-slate-100 bg-white px-2 py-1.5"><small className="block text-[10px] uppercase text-slate-400">Height</small><strong>{v.Height ?? '-'} <small>cm</small></strong></span>
-                                        <span className="rounded-md border border-slate-100 bg-white px-2 py-1.5"><small className="block text-[10px] uppercase text-slate-400">Weight</small><strong>{v.Weight ?? '-'} <small>kg</small></strong></span>
-                                        <span className="rounded-md border border-slate-100 bg-white px-2 py-1.5"><small className="block text-[10px] uppercase text-slate-400">Blood Pressure</small><strong>{v.BloodPressure || '-'}</strong></span>
-                                        <span className={`rounded-md border px-2 py-1.5 ${v.PulseRate == null ? 'border-slate-100 bg-white text-slate-600' : vitalTone(v.PulseRate, 'pulse')}`}><small className="block text-[10px] uppercase opacity-70">Pulse</small><strong>{v.PulseRate ?? '-'} <small>bpm</small></strong></span>
-                                        <span className={`rounded-md border px-2 py-1.5 ${v.Temperature == null ? 'border-slate-100 bg-white text-slate-600' : vitalTone(v.Temperature, 'temperature')}`}><small className="block text-[10px] uppercase opacity-70">Temperature</small><strong>{v.Temperature ?? '-'} <small>°C</small></strong></span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>}
-
-                            <div>
-                              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Pill size={14} /> Prescriptions</p>
-                              {prescriptions.length === 0 ? <p className="text-sm text-slate-400">No prescriptions recorded.</p> : (
-                                <div className="space-y-3">
-                                  {prescriptions.map((p) => (
-                                    <div key={p.PrescriptionId} className="rounded-lg bg-slate-50 p-3">
-                                      <div className="flex items-center justify-between gap-2"><p className="text-xs text-slate-400">{fmt(p.CreatedAt)}</p>{date === currentDateKey() && <div className="flex gap-1"><button type="button" className="btn-ghost px-2 py-1" title="Edit prescription" onClick={() => editPrescription(p)}><Pencil size={14} /></button><button type="button" className="btn-ghost px-2 py-1 text-red-500 hover:bg-red-50" title="Delete prescription" onClick={() => deletePrescription(p)}><Trash2 size={14} /></button></div>}</div>
-                                      {p.items?.length > 0 && <ul className="mt-2 space-y-1">{p.items.map((it) => <li key={it.ItemId} className="text-sm text-slate-600">{it.MedicineName}{it.Frequency && ` — ${it.Frequency}`}{it.Instructions && ` · ${it.Instructions}`}{it.Duration && ` · ${it.Duration}`}</li>)}</ul>}
-                                      {p.NextVisitDate && <p className="mt-2 text-xs font-medium text-brand-700">Next Visit: {new Date(p.NextVisitDate).toLocaleDateString()}</p>}
-                                      {p.labTests?.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-1.5">
-                                          {p.labTests.map((t) => (
-                                            <span key={t.Id} className="badge bg-violet-100 text-violet-700">{t.TestName}</span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Paperclip size={14} /> Attachments</p>
-                              {dateDocs.length === 0 ? <p className="text-sm text-slate-400">No attachments for this date.</p> : (
-                                <div className="space-y-2">
-                                  {dateDocs.map((d) => (
-                                    <div key={d.DocumentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                                      <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium text-slate-700">{d.FileName}</p>
-                                        <p className="text-xs text-slate-400">{d.Category || 'Document'}</p>
-                                      </div>
-                                      <div className="flex shrink-0 gap-1">
-                                        <button type="button" className="btn-ghost px-2 py-1" title="Preview" onClick={() => setPreviewDoc(d)}><Eye size={14} /></button>
-                                        <button type="button" className="btn-ghost px-2 py-1" title="Download" onClick={() => patientDocumentApi.download(d.DocumentId, d.FileName)}><Download size={14} /></button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </section>
-                      );
-                    })}
-                  {history.vitals.length === 0 && history.prescriptions.length === 0 && docs.length === 0 && <p className="text-sm text-slate-400">No records available.</p>}
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>

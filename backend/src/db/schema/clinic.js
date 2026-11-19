@@ -70,6 +70,24 @@ CREATE TABLE VitalSign (
         REFERENCES Patient(PatientId) ON DELETE CASCADE
 );
 
+-- Pet clinic vitals. PulseRate is shown as Heart Rate; Height and BloodPressure are kept but unused.
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name='RespiratoryRate' AND Object_ID=Object_ID('VitalSign'))
+    ALTER TABLE VitalSign ADD RespiratoryRate INT NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name='BodyConditionScore' AND Object_ID=Object_ID('VitalSign'))
+    ALTER TABLE VitalSign ADD BodyConditionScore TINYINT NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name='MucousMembrane' AND Object_ID=Object_ID('VitalSign'))
+    ALTER TABLE VitalSign ADD MucousMembrane NVARCHAR(30) NULL;
+-- Pet clinical examination fields (Vital Sign screen).
+IF COL_LENGTH('dbo.VitalSign','HeartRate') IS NULL ALTER TABLE VitalSign ADD HeartRate INT NULL;
+IF COL_LENGTH('dbo.VitalSign','SkinCoat') IS NULL ALTER TABLE VitalSign ADD SkinCoat NVARCHAR(200) NULL;
+IF COL_LENGTH('dbo.VitalSign','CMM') IS NULL ALTER TABLE VitalSign ADD CMM NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.VitalSign','STT') IS NULL ALTER TABLE VitalSign ADD STT NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.VitalSign','CRP') IS NULL ALTER TABLE VitalSign ADD CRP NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.VitalSign','VMM') IS NULL ALTER TABLE VitalSign ADD VMM NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.VitalSign','OralCavity') IS NULL ALTER TABLE VitalSign ADD OralCavity NVARCHAR(500) NULL;
+IF COL_LENGTH('dbo.VitalSign','AbdominalExam') IS NULL ALTER TABLE VitalSign ADD AbdominalExam NVARCHAR(1000) NULL;
+IF COL_LENGTH('dbo.VitalSign','RectalExam') IS NULL ALTER TABLE VitalSign ADD RectalExam NVARCHAR(1000) NULL;
+
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Prescription' AND xtype='U')
 CREATE TABLE Prescription (
     PrescriptionId INT IDENTITY(1,1) PRIMARY KEY,

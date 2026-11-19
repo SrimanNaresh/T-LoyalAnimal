@@ -14,6 +14,32 @@ function readReferral(body) {
   return { type, referredBy };
 }
 
+const GENDERS = ['Male', 'Female'];
+const AGE_UNITS = ['Years', 'Months'];
+const clean = (v) => (v ?? '').toString().trim() || null;
+
+// Pet details: the Patient row is the pet, MobileNo is the owner's mobile.
+function readPet(body) {
+  return {
+    ownerName: clean(body.ownerName),
+    species: clean(body.species),
+    breed: clean(body.breed),
+    color: clean(body.color),
+    gender: GENDERS.includes(body.gender) ? body.gender : null,
+    ageUnit: AGE_UNITS.includes(body.ageUnit) ? body.ageUnit : 'Years',
+  };
+}
+
+function addPetInputs(request, pet) {
+  return request
+    .input('ownerName', sql.NVarChar, pet.ownerName)
+    .input('species', sql.NVarChar, pet.species)
+    .input('breed', sql.NVarChar, pet.breed)
+    .input('color', sql.NVarChar, pet.color)
+    .input('gender', sql.NVarChar, pet.gender)
+    .input('ageUnit', sql.NVarChar, pet.ageUnit);
+}
+
 // List / search by name or mobile
 router.get('/', async (req, res) => {
   try {
@@ -24,10 +50,11 @@ router.get('/', async (req, res) => {
       .input('search', sql.NVarChar, `%${search}%`)
       .input('mobile', sql.NVarChar, `%${mobile}%`)
       .query(`
-        SELECT PatientId, Name, MobileNo, Address, Age, ReferralType, ReferredBy, CreatedAt
+        SELECT PatientId, Name, MobileNo, Address, Age, AgeUnit, Gender, OwnerName, Species, Breed, Color,
+          ReferralType, ReferredBy, CreatedAt
         FROM Patient
         WHERE IsActive = 1
-          AND (@search = '%%' OR Name LIKE @search)
+          AND (@search = '%%' OR Name LIKE @search OR OwnerName LIKE @search OR MobileNo LIKE @search)
           AND (@mobile = '%%' OR MobileNo LIKE @mobile)
         ORDER BY PatientId DESC
       `);
@@ -68,12 +95,13 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, mobileNo, address, age } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const { mobileNo, address, age } = req.body;
+    // Pet name is optional; Name is NOT NULL in the table, so a blank name is stored as ''.
+    const name = (req.body.name ?? '').toString().trim();
     const referral = readReferral(req.body);
+    const pet = readPet(req.body);
     const pool = await getPool();
-    const result = await pool
-      .request()
+    const result = await addPetInputs(pool.request(), pet)
       .input('name', sql.NVarChar, name)
       .input('mobileNo', sql.NVarChar, mobileNo || null)
       .input('address', sql.NVarChar, address || null)
@@ -81,9 +109,11 @@ router.post('/', async (req, res) => {
       .input('referralType', sql.NVarChar, referral.type)
       .input('referredBy', sql.NVarChar, referral.referredBy)
       .query(`
-        INSERT INTO Patient (Name, MobileNo, Address, Age, ReferralType, ReferredBy, PatientCode)
+        INSERT INTO Patient (Name, MobileNo, Address, Age, ReferralType, ReferredBy,
+          OwnerName, Species, Breed, Color, Gender, AgeUnit, PatientCode)
         OUTPUT INSERTED.*
-        VALUES (@name, @mobileNo, @address, @age, @referralType, @referredBy, ${NEXT_PATIENT_CODE_SQL})
+        VALUES (@name, @mobileNo, @address, @age, @referralType, @referredBy,
+          @ownerName, @species, @breed, @color, @gender, @ageUnit, ${NEXT_PATIENT_CODE_SQL})
       `);
     res.status(201).json(result.recordset[0]);
   } catch (err) {
@@ -93,11 +123,12 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, mobileNo, address, age } = req.body;
+    const { mobileNo, address, age } = req.body;
+    const name = (req.body.name ?? '').toString().trim();
     const referral = readReferral(req.body);
+    const pet = readPet(req.body);
     const pool = await getPool();
-    const result = await pool
-      .request()
+    const result = await addPetInputs(pool.request(), pet)
       .input('id', sql.Int, req.params.id)
       .input('name', sql.NVarChar, name)
       .input('mobileNo', sql.NVarChar, mobileNo || null)
@@ -107,7 +138,9 @@ router.put('/:id', async (req, res) => {
       .input('referredBy', sql.NVarChar, referral.referredBy)
       .query(`
         UPDATE Patient SET Name=@name, MobileNo=@mobileNo, Address=@address, Age=@age,
-          ReferralType=@referralType, ReferredBy=@referredBy, UpdatedAt=GETDATE()
+          ReferralType=@referralType, ReferredBy=@referredBy,
+          OwnerName=@ownerName, Species=@species, Breed=@breed, Color=@color, Gender=@gender, AgeUnit=@ageUnit,
+          UpdatedAt=GETDATE()
         OUTPUT INSERTED.*
         WHERE PatientId=@id
       `);
@@ -146,32 +179,41 @@ router.post('/bulk', async (req, res) => {
     const name = (r.name ?? r.Name ?? '').toString().trim();
     const mobileNo = (r.mobileNo ?? r.MobileNo ?? '').toString().trim() || null;
     const address = (r.address ?? r.Address ?? '').toString().trim() || null;
+    const pet = readPet({
+      ownerName: r.ownerName ?? r.OwnerName,
+      species: r.species ?? r.Species,
+      breed: r.breed ?? r.Breed,
+      color: r.color ?? r.Color,
+      gender: r.gender ?? r.Gender,
+      ageUnit: r.ageUnit ?? r.AgeUnit,
+    });
     const id = Number(r.patientId ?? r.PatientId);
-    if (!name) {
-      errors.push({ row: i + 1, error: 'Name is required' });
+    if (!name && !pet.ownerName) {
+      errors.push({ row: i + 1, error: 'Name or OwnerName is required' });
       continue;
     }
     try {
       if (Number.isInteger(id) && id > 0) {
-        const upd = await pool
-          .request()
+        const upd = await addPetInputs(pool.request(), pet)
           .input('id', sql.Int, id)
           .input('name', sql.NVarChar, name)
           .input('mobileNo', sql.NVarChar, mobileNo)
           .input('address', sql.NVarChar, address)
           .query(`
-            UPDATE Patient SET Name=@name, MobileNo=@mobileNo, Address=@address WHERE PatientId=@id;
+            UPDATE Patient SET Name=@name, MobileNo=@mobileNo, Address=@address,
+              OwnerName=@ownerName, Species=@species, Breed=@breed, Color=@color, Gender=@gender
+            WHERE PatientId=@id;
             SELECT @@ROWCOUNT AS affected;
           `);
         if (upd.recordset[0].affected > 0) updated++;
         else errors.push({ row: i + 1, error: `PatientId ${id} not found` });
       } else {
-        await pool
-          .request()
+        await addPetInputs(pool.request(), pet)
           .input('name', sql.NVarChar, name)
           .input('mobileNo', sql.NVarChar, mobileNo)
           .input('address', sql.NVarChar, address)
-          .query(`INSERT INTO Patient (Name, MobileNo, Address, PatientCode) VALUES (@name, @mobileNo, @address, ${NEXT_PATIENT_CODE_SQL})`);
+          .query(`INSERT INTO Patient (Name, MobileNo, Address, OwnerName, Species, Breed, Color, Gender, AgeUnit, PatientCode)
+            VALUES (@name, @mobileNo, @address, @ownerName, @species, @breed, @color, @gender, @ageUnit, ${NEXT_PATIENT_CODE_SQL})`);
         inserted++;
       }
     } catch (err) {

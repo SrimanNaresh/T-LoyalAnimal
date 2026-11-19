@@ -30,6 +30,17 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_Patient_Mobile')
 -- For 'Doctor', the clinic/hospital name is kept in ReferredBy.
 IF COL_LENGTH('dbo.Patient','ReferralType') IS NULL
     ALTER TABLE dbo.Patient ADD ReferralType NVARCHAR(20) NULL;
+-- Pet clinic: Patient row is the pet. Name = pet name, MobileNo = owner's mobile.
+IF COL_LENGTH('dbo.Patient','OwnerName') IS NULL
+    ALTER TABLE dbo.Patient ADD OwnerName NVARCHAR(200) NULL;
+IF COL_LENGTH('dbo.Patient','Species') IS NULL
+    ALTER TABLE dbo.Patient ADD Species NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.Patient','Breed') IS NULL
+    ALTER TABLE dbo.Patient ADD Breed NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.Patient','Color') IS NULL
+    ALTER TABLE dbo.Patient ADD Color NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.Patient','AgeUnit') IS NULL
+    ALTER TABLE dbo.Patient ADD AgeUnit NVARCHAR(10) NULL;
 
 IF OBJECT_ID('dbo.AppUser','U') IS NULL
 CREATE TABLE dbo.AppUser (

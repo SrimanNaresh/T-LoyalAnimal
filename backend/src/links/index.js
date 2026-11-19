@@ -77,10 +77,12 @@ router.get('/lab-tests', async (req, res) => {
   }
 });
 
-// Clinic's medicine list = Pharmacy items received through Stock In (user
-// decision 2026-11-12: the clinic Medication master is no longer used).
+// Clinic's medicine list = every active item in Pharmacy > Item (user
+// decision 2026-11-12: the clinic Medication master is no longer used;
+// 2026-11-19: include items with no Stock In yet).
 // One row per item: names, current stock (the Stock Report's sum), latest
-// Stock In MRP and the nearest expiry among batches that still have stock.
+// Stock In MRP (else the item's own MRP) and the nearest expiry among
+// batches that still have stock.
 // ?search= filters by name / generic; ?inStock=1 keeps only items with stock.
 router.get('/medicines', async (req, res) => {
   try {
@@ -93,9 +95,9 @@ router.get('/medicines', async (req, res) => {
         SELECT i.ItemId, i.Name AS MedicineName, g.Name AS GenericName, m.Name AS Manufacturer,
                i.Category, i.Potency, i.Pack, u.Name AS Unit,
                ISNULL(st.CurrentStock, 0) AS Stock,
-               last.MRP, last.InDate AS LastStockIn
+               ISNULL(last.MRP, i.MRP) AS MRP, last.InDate AS LastStockIn
         FROM PharmacyItem i
-        CROSS APPLY (
+        OUTER APPLY (
           SELECT TOP 1 l.MRP, h.InDate
           FROM StockInItem l JOIN StockIn h ON h.StockInId = l.StockInId AND h.IsActive = 1
           WHERE l.ItemId = i.ItemId ORDER BY h.InDate DESC, l.LineId DESC

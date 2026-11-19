@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Pencil, Trash2, Users, Plus } from 'lucide-react';
+import { Search, Pencil, Trash2, PawPrint, Plus } from 'lucide-react';
 import { Spinner, EmptyState, Toast, CardHeader } from '../../../../components/ui.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { patientApi } from '../../api.js';
@@ -17,7 +17,7 @@ export default function PatientList() {
     try {
       setRows(await patientApi.list({ search: q }));
     } catch {
-      show('Failed to load patients', 'error');
+      show('Failed to load pets', 'error');
     } finally {
       setLoading(false);
     }
@@ -30,7 +30,7 @@ export default function PatientList() {
   }, [search, load]);
 
   const remove = async (row) => {
-    if (!confirm(`Delete "${row.Name}"?`)) return;
+    if (!confirm(`Delete "${row.Name || `${row.OwnerName || 'Owner'}'s pet`}"?`)) return;
     try {
       await patientApi.remove(row.PatientId);
       show('Deleted', 'success');
@@ -44,14 +44,14 @@ export default function PatientList() {
     <div>
       <div className="card">
         <CardHeader
-          icon={Users}
-          title="Patient List"
-          subtitle="Search, edit and delete patients"
+          icon={PawPrint}
+          title="Pet List"
+          subtitle="Search, edit and delete pets"
           actions={
             <>
               <div className="relative w-full sm:w-72">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-                <input className="input pl-9" placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="input pl-9" placeholder="Search pet, owner or mobile..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <button className="btn-primary" onClick={() => navigate('/clinic/registration/patient')}>
                 <Plus size={16} /> Add
@@ -63,17 +63,19 @@ export default function PatientList() {
         {loading ? (
           <Spinner />
         ) : rows.length === 0 ? (
-          <EmptyState message="No patients found." />
+          <EmptyState message="No pets found." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-13">
               <thead>
                 <tr className="table-head">
                   <th className="rounded-l-lg px-2.5 py-1.5">#</th>
-                  <th className="px-2.5 py-1.5">Name</th>
-                  <th className="px-2.5 py-1.5">Mobile</th>
+                  <th className="px-2.5 py-1.5">Pet</th>
+                  <th className="px-2.5 py-1.5">Species / Breed</th>
+                  <th className="px-2.5 py-1.5">Gender</th>
                   <th className="px-2.5 py-1.5">Age</th>
-                  <th className="px-2.5 py-1.5">Address</th>
+                  <th className="px-2.5 py-1.5">Owner</th>
+                  <th className="px-2.5 py-1.5">Mobile</th>
                   <th className="rounded-r-lg px-2.5 py-1.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -81,10 +83,12 @@ export default function PatientList() {
                 {rows.map((r, i) => (
                   <tr key={r.PatientId} className="table-row">
                     <td className="px-2.5 py-1 text-slate-400">{i + 1}</td>
-                    <td className="px-2.5 py-1 font-medium text-slate-700">{r.Name}</td>
+                    <td className="px-2.5 py-1 font-medium text-slate-700">{r.Name || <span className="font-normal italic text-slate-400">Unnamed</span>}</td>
+                    <td className="px-2.5 py-1 text-slate-500">{[r.Species, r.Breed].filter(Boolean).join(' · ') || '-'}</td>
+                    <td className="px-2.5 py-1 text-slate-500">{r.Gender || '-'}</td>
+                    <td className="px-2.5 py-1 text-slate-500">{r.Age != null ? `${r.Age} ${r.AgeUnit === 'Months' ? 'mo' : 'yr'}` : '-'}</td>
+                    <td className="px-2.5 py-1 text-slate-500">{r.OwnerName || '-'}</td>
                     <td className="px-2.5 py-1 text-slate-500">{r.MobileNo || '-'}</td>
-                    <td className="px-2.5 py-1 text-slate-500">{r.Age ?? '-'}</td>
-                    <td className="px-2.5 py-1 text-slate-500">{r.Address || '-'}</td>
                     <td className="px-2.5 py-1">
                       <div className="flex justify-end gap-1">
                         <button className="btn-ghost !p-1" onClick={() => navigate('/clinic/registration/patient', { state: { editPatient: r } })}><Pencil size={15} /></button>

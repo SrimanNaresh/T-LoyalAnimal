@@ -66,7 +66,7 @@ export default function PrescriptionPrint() {
       setPageWidth(c?.pageWidth || '');
     }).catch(() => setClinic(null));
   }, []);
-  useEffect(() => { linkApi.medicines().then(setMeds) /* Pharmacy Stock In items */.catch(() => setMeds([])); }, []);
+  useEffect(() => { linkApi.medicines().then(setMeds) /* Pharmacy › Item list */.catch(() => setMeds([])); }, []);
 
   const loadHistory = () => {
     if (!selected) return;

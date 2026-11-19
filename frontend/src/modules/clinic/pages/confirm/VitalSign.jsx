@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Save, ListChecks, Upload, Download, FileText, FolderOpen, Eye, Camera, ImagePlus, X } from 'lucide-react';
 import { PageHeader, Toast, CardHeader, Spinner, EmptyState } from '../../../../components/ui.jsx';
 import PatientPicker from '../../components/PatientPicker.jsx';
+import PetVitalFields from '../../components/PetVitalFields.jsx';
+import { emptyPetVitals, petVitalsFromRow, petVitalsPayload } from '../../config/petVitals.js';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { vitalApi, patientDocumentApi } from '../../api.js';
 import { buildPdfFromImages } from '../../utils/imagesToPdf.js';
 
-const empty = { height: '', weight: '', bloodPressure: '', pulseRate: '', temperature: '', comments: '' };
+const empty = emptyPetVitals();
+const petLabel = (p) => p?.Name || `${p?.OwnerName || 'Owner'}'s pet`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '-');
 const MAX_PHOTOS = 6;
@@ -33,14 +36,7 @@ export default function VitalSign() {
       .then((rows) => {
         const todays = rows?.[0];
         if (todays) {
-          setForm({
-            height: todays.Height ?? '',
-            weight: todays.Weight ?? '',
-            bloodPressure: todays.BloodPressure || '',
-            pulseRate: todays.PulseRate ?? '',
-            temperature: todays.Temperature ?? '',
-            comments: todays.Comments || '',
-          });
+          setForm(petVitalsFromRow(todays));
           setEditingVitalId(todays.VitalId);
         } else {
           setForm(empty);
@@ -94,18 +90,10 @@ export default function VitalSign() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!selected) return show('Select a patient first', 'error');
+    if (!selected) return show('Select a pet first', 'error');
     setSaving(true);
     try {
-      const payload = {
-        patientId: selected.PatientId,
-        height: form.height || null,
-        weight: form.weight || null,
-        bloodPressure: form.bloodPressure || null,
-        pulseRate: form.pulseRate || null,
-        temperature: form.temperature || null,
-        comments: form.comments || null,
-      };
+      const payload = { patientId: selected.PatientId, ...petVitalsPayload(form) };
       if (editingVitalId) {
         await vitalApi.update(editingVitalId, payload);
         show('Vital sign updated', 'success');
@@ -123,7 +111,7 @@ export default function VitalSign() {
 
   const submitUpload = async (e) => {
     e.preventDefault();
-    if (!selected) return show('Select a patient first', 'error');
+    if (!selected) return show('Select a pet first', 'error');
     if (!attachmentType) return show('Choose an Attachment Type first', 'error');
 
     setUploading(true);
@@ -138,7 +126,7 @@ export default function VitalSign() {
         } finally {
           setConverting(false);
         }
-        uploadFile = new File([pdfBlob], `${selected.Name.replace(/\s+/g, '_')}-scan-${todayStr()}.pdf`, { type: 'application/pdf' });
+        uploadFile = new File([pdfBlob], `${petLabel(selected).replace(/[^A-Za-z0-9]+/g, '_')}-scan-${todayStr()}.pdf`, { type: 'application/pdf' });
       } else {
         if (!file) return show('Choose a PDF file', 'error');
         if (file.type !== 'application/pdf') return show('Only PDF files are allowed for the PDF option', 'error');
@@ -188,31 +176,10 @@ export default function VitalSign() {
         <form onSubmit={submit} className="card">
           {editingVitalId && (
             <p className="mb-3 text-xs font-medium text-brand-600">
-              Already recorded today for this patient — editing that record instead of creating a new one.
+              Already recorded today for this pet — editing that record instead of creating a new one.
             </p>
           )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="label">Height (cm)</label>
-              <input type="number" step="0.1" className="input" value={form.height} onChange={update('height')} />
-            </div>
-            <div>
-              <label className="label">Weight (kg)</label>
-              <input type="number" step="0.1" className="input" value={form.weight} onChange={update('weight')} />
-            </div>
-            <div>
-              <label className="label">Blood Pressure</label>
-              <input className="input" placeholder="e.g. 120/80" value={form.bloodPressure} onChange={update('bloodPressure')} />
-            </div>
-            <div>
-              <label className="label">Pulse Rate (bpm)</label>
-              <input type="number" className="input" value={form.pulseRate} onChange={update('pulseRate')} />
-            </div>
-            <div>
-              <label className="label">Temperature (°C)</label>
-              <input type="number" step="0.1" className="input" value={form.temperature} onChange={update('temperature')} />
-            </div>
-          </div>
+          <PetVitalFields values={form} onChange={(k, v) => setForm((f) => ({ ...f, [k]: v }))} />
           <div className="mt-4">
             <label className="label">Comments</label>
             <textarea className="input" rows={3} value={form.comments} onChange={update('comments')} placeholder="Additional notes" />
@@ -232,7 +199,7 @@ export default function VitalSign() {
             <CardHeader
               icon={FolderOpen}
               title="Lab Reports & Scans"
-              subtitle={`Attachments for ${selected.Name} — saved with today's date, alongside their prescriptions`}
+              subtitle={`Attachments for ${petLabel(selected)} — saved with today's date, alongside its prescriptions`}
             />
             <form onSubmit={submitUpload} className="flex flex-wrap items-end gap-3">
               <div className="w-full sm:w-44">
