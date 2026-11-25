@@ -3,8 +3,9 @@ import { Printer, CalendarRange, Search } from 'lucide-react';
 import { Spinner, EmptyState, Toast, CardHeader } from '../../../../components/ui.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { reportApi } from '../../api.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 const fmt = (d) => (d ? new Date(d).toLocaleDateString() : '-');
 
 export default function ReportVisitList() {

@@ -4,12 +4,13 @@ import { PageHeader, CardHeader, Spinner, EmptyState, Toast } from '../../../../
 import { PrescriptionHeader, PrescriptionFooter, PrescriptionPageSize } from '../../components/PrescriptionLetterhead.jsx';
 import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
-import { billingApi, clinicApi, employeeApi, prescriptionApi, vitalApi } from '../../api.js';
+import { billingApi, clinicApi, employeeApi, patientApi, prescriptionApi, vitalApi } from '../../api.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 const fmtTime = (d) => (d ? new Date(d).toLocaleString() : '-');
 const fmtMoney = (n) => `₹${Number(n || 0).toFixed(2)}`;
-const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : 'unknown');
+const dateKey = (d) => (d ? localDateKey(new Date(d)) : 'unknown');
 
 const statusTone = {
   Confirm: 'bg-slate-100 text-slate-600',
@@ -129,9 +130,10 @@ export default function BillingPatientBill() {
     }
     setPrintingRxId(row.patientId);
     try {
-      const [history, vitals] = await Promise.all([
+      const [history, vitals, pet] = await Promise.all([
         prescriptionApi.history(row.patientId),
         vitalApi.list({ patientId: row.patientId, date }).catch(() => []),
+        patientApi.get(row.patientId).catch(() => null),
       ]);
       const rx = history?.prescriptions?.find((p) => dateKey(p.CreatedAt) === date);
       if (!rx) {
@@ -139,10 +141,11 @@ export default function BillingPatientBill() {
         return;
       }
       setPrintRx({
-        patient: { PatientId: row.patientId, PatientName: row.name, MobileNo: row.mobileNo },
+        patient: { PatientId: row.patientId, PatientName: row.name, MobileNo: row.mobileNo, ...(pet || {}) },
         meds: rx.items || [],
         vitals: vitals?.[0] || null,
         age: row.age,
+        rx,
       });
     } catch (err) {
       show(err.response?.data?.error || 'Failed to load prescription', 'error');
@@ -342,6 +345,7 @@ export default function BillingPatientBill() {
             vitals={printRx.vitals}
             meds={printRx.meds}
             age={printRx.age}
+            rx={printRx.rx}
           />
         </div>
       )}

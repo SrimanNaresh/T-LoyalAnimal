@@ -5,8 +5,9 @@ import { Spinner, EmptyState, Toast, CardHeader } from '../../../../components/u
 import { useToast } from '../../../../hooks/useToast.js';
 import { useAuth } from '../../../../context/AuthContext.jsx';
 import { confirmApi } from '../../api.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 // Always Indian Standard Time, regardless of the viewing device's own timezone —
 // and uppercase AM/PM, matching the convention Indian systems use (not "pm").
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }).toUpperCase() : '-');

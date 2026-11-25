@@ -1,5 +1,5 @@
 import { PrescriptionPageSize } from './PrescriptionLetterhead.jsx';
-import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MED_FIELD_GETTERS, PATIENT_FIELD_GETTERS, fmtVitalValue } from '../config/letterPadParameters.js';
+import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MED_FIELD_GETTERS, PATIENT_FIELD_GETTERS, EXAM_FIELD_GETTERS, fmtVitalValue } from '../config/letterPadParameters.js';
 
 // One line per medicine, in the same order across every medicine column —
 // so lining Medicine Name / M-A-E-N / AF-BF / Days up as separate columns
@@ -20,12 +20,16 @@ function MedicineFieldLines({ type, items }) {
 // selecting a patient, and by any other screen that needs to print a
 // prescription on that same letterhead — e.g. Billing -> Patient Bill —
 // so every print of this template stays in sync with the saved layout.
-export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, fields, patient, vitals, meds, age }) {
+// rx = the prescription's examination fields:
+// { CaseHistory, Observation, Notes, NextVisitDate, labTests: [{ TestName }] }.
+export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, fields, patient, vitals, meds, age, rx }) {
   if (!imageData) return null;
 
   const renderValue = (def) => {
     if (MED_FIELD_GETTERS[def.type]) return <MedicineFieldLines type={def.type} items={meds} />;
-    if (def.type === 'Age') return `Age: ${age ?? '-'}`;
+    if (EXAM_FIELD_GETTERS[def.type]) return EXAM_FIELD_GETTERS[def.type](rx);
+    // Age with its unit from the pet record; the bare `age` prop is the fallback.
+    if (def.type === 'Age' && patient?.Age == null) return `${age ?? '-'}`;
     if (PATIENT_FIELD_GETTERS[def.type]) return PATIENT_FIELD_GETTERS[def.type](patient);
     return fmtVitalValue(def, vitals);
   };
@@ -38,7 +42,6 @@ export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, f
         {(fields || []).map((f) => {
           const def = PARAMETER_TYPES.find((p) => p.type === f.type);
           if (!def) return null; // a field type from before this parameter set changed
-          const Icon = def.icon;
           return (
             <div
               key={f.id}
@@ -50,10 +53,9 @@ export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, f
                 // inside the image regardless of container width.
                 transform: `translate(${f.x < 15 ? '0' : f.x > 85 ? '-100%' : '-50%'}, ${f.y < 15 ? '0' : f.y > 85 ? '-100%' : '-50%'})`,
               }}
-              className="absolute flex max-w-[85%] items-start gap-1.5 text-xs text-ink-800"
+              className="absolute max-w-[85%] text-xs text-ink-800"
             >
-              <Icon size={13} className={`mt-0.5 shrink-0 ${def.iconClass}`} />
-              <div style={{ fontSize: `${f.fontSize || DEFAULT_FONT_SIZE}px` }}>{renderValue(def)}</div>
+              <div className="whitespace-pre-line" style={{ fontSize: `${f.fontSize || DEFAULT_FONT_SIZE}px` }}>{renderValue(def)}</div>
             </div>
           );
         })}

@@ -115,8 +115,7 @@ router.put('/:id', async (req, res) => {
   try {
     const { height, weight, bloodPressure, pulseRate, temperature, comments } = req.body;
     const pool = await getPool();
-    const result = await pool
-      .request()
+    const result = await addPetVitalInputs(pool.request(), req.body)
       .input('id', sql.Int, req.params.id)
       .input('height', sql.Decimal(6, 2), height || null)
       .input('weight', sql.Decimal(6, 2), weight || null)

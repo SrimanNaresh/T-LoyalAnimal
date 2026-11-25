@@ -9,8 +9,9 @@ import { pharmacyItemApi, stockAdjustmentApi } from '../api.js';
 import { round2 } from '../utils/purchaseCalc.js';
 import { CardField, CardValue, cardBox, cardBad } from '../../../components/MobileCard.jsx';
 import { usePhoneFit, PhoneFooter, PhoneTabs } from '../../../components/PhoneLayout.jsx';
+import { localDateKey } from '../../../utils/localDate.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const money = (n) => (Number(n) || 0).toFixed(2);
 const numStr = (v) => (v == null || v === '' || Number(v) === 0 ? '' : String(Number(v)));
 let nextKey = 1;

@@ -9,10 +9,11 @@ import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { vitalApi, patientDocumentApi } from '../../api.js';
 import { buildPdfFromImages } from '../../utils/imagesToPdf.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
 const empty = emptyPetVitals();
 const petLabel = (p) => p?.Name || `${p?.OwnerName || 'Owner'}'s pet`;
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '-');
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;

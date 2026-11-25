@@ -9,9 +9,10 @@ import { gridKeys } from '../../../components/grid/gridKeys.js';
 import { useToast } from '../../../hooks/useToast.js';
 import { stockReturnApi, vendorApi } from '../api.js';
 import { round2 } from '../utils/purchaseCalc.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const money = (n) => (Number(n) || 0).toFixed(2);
 const dateLabel = (iso) => new Date(iso).toLocaleDateString('en-GB');
 const monthLabel = (iso) => (iso ? `${MONTHS[Number(String(iso).slice(5, 7)) - 1]} ${String(iso).slice(0, 4)}` : '-');

@@ -6,8 +6,9 @@ import {
 import { Spinner, EmptyState } from '../../../components/ui.jsx';
 import { StatCards, DashTabs, QueueSteps, QuickActionsPanel } from '../components/DashboardKit.jsx';
 import { patientApi, confirmApi, vitalApi } from '../api.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-');
 
 const statusColor = {

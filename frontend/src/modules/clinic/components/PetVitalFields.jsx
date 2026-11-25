@@ -7,7 +7,7 @@ const byKind = (kind) => PET_VITAL_FIELDS.filter((f) => f.kind === kind);
  * second row (with suggestions), long examinations as two text areas.
  * `values` is keyed by field key; `onChange(key, value)` updates one field.
  */
-export default function PetVitalFields({ values, onChange, idPrefix = 'pv', compact = false }) {
+export default function PetVitalFields({ values, onChange, idPrefix = 'pv', compact = false, withComments = false }) {
   const set = (key) => (e) => onChange(key, e.target.value);
 
   const renderInput = (f) => (
@@ -37,14 +37,14 @@ export default function PetVitalFields({ values, onChange, idPrefix = 'pv', comp
   const findings = byKind('text').filter((f) => f.options);
 
   return (
-    <div className="space-y-4">
-      <div className={`grid grid-cols-2 gap-4 sm:grid-cols-3 ${compact ? 'lg:grid-cols-3' : 'lg:grid-cols-6'}`}>
+    <div className="space-y-2">
+      <div className={`grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 ${compact ? 'lg:grid-cols-3' : 'lg:grid-cols-7'}`}>
         {readings.map(renderInput)}
       </div>
-      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${compact ? '' : 'lg:grid-cols-4'}`}>
+      <div className={`grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 ${compact ? '' : 'lg:grid-cols-4'}`}>
         {findings.map(renderInput)}
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 ${withComments && !compact ? 'lg:grid-cols-3' : ''}`}>
         {byKind('textarea').map((f) => (
           <div key={f.key}>
             <label className="label" htmlFor={`${idPrefix}-${f.key}`}>{f.label}</label>
@@ -58,6 +58,19 @@ export default function PetVitalFields({ values, onChange, idPrefix = 'pv', comp
             />
           </div>
         ))}
+        {withComments && (
+          <div>
+            <label className="label" htmlFor={`${idPrefix}-comments`}>Comments</label>
+            <textarea
+              id={`${idPrefix}-comments`}
+              className="input"
+              rows={2}
+              maxLength={1000}
+              value={values.comments ?? ''}
+              onChange={set('comments')}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

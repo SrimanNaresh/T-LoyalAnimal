@@ -5,8 +5,9 @@ import PatientPicker from '../../components/PatientPicker.jsx';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { patientDocumentApi } from '../../api.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '-');
 
 export default function PatientRecords() {

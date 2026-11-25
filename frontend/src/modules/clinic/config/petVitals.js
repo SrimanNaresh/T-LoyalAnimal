@@ -1,6 +1,7 @@
 // Pet clinical examination fields for the Vital Sign screen and its list.
 // key = API body key, col = VitalSign column, kind = how it is entered.
 export const PET_VITAL_FIELDS = [
+  { key: 'weight', col: 'Weight', label: 'Weight (kg)', kind: 'number', step: '0.01', placeholder: 'e.g. 12.5', short: 'Wt', unit: 'kg' },
   { key: 'temperature', col: 'Temperature', label: 'Temperature (°C)', kind: 'number', step: '0.1', placeholder: 'e.g. 38.5', short: 'Temp', unit: '°C' },
   { key: 'pulseRate', col: 'PulseRate', label: 'Pulse (/min)', kind: 'number', short: 'Pulse', unit: '/min' },
   { key: 'heartRate', col: 'HeartRate', label: 'Heart Rate (bpm)', kind: 'number', short: 'HR', unit: 'bpm' },

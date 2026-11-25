@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Upload, Activity, Pill, X, Save, Printer, ArrowLeft, UserCheck, GripVertical, Image as ImageIcon, User, ChevronDown, Minus, Plus } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Upload, Activity, Pill, X, Save, Printer, ArrowLeft, UserCheck, GripVertical, Image as ImageIcon, User, ChevronDown, Minus, Plus, ClipboardList, AlignHorizontalSpaceAround, AlignVerticalSpaceAround } from 'lucide-react';
 import { PageHeader, CardHeader, Spinner, EmptyState, Toast } from '../../../../components/ui.jsx';
 import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { clinicApi, confirmApi, vitalApi, prescriptionApi, patientApi } from '../../api.js';
 import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MIN_FONT_SIZE, MAX_FONT_SIZE } from '../../config/letterPadParameters.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 
 // Group headers use each group's own dominant color so the collapsed palette
 // still hints at what's inside — teal for Patient, blue for Medicine, rose
@@ -15,6 +16,7 @@ const PARAMETER_GROUPS = [
   { name: 'Patient', icon: User, headerClass: 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100' },
   { name: 'Medicine', icon: Pill, headerClass: 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' },
   { name: 'Vital Sign', icon: Activity, headerClass: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100' },
+  { name: 'Examination', icon: ClipboardList, headerClass: 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100' },
 ];
 
 export default function LetterPadPrescription() {
@@ -33,6 +35,7 @@ export default function LetterPadPrescription() {
   const [boundVitals, setBoundVitals] = useState(null);
   const [boundMeds, setBoundMeds] = useState([]);
   const [boundAge, setBoundAge] = useState(null);
+  const [boundRx, setBoundRx] = useState(null);
   const [binding, setBinding] = useState(false);
 
   useEffect(() => {
@@ -71,22 +74,73 @@ export default function LetterPadPrescription() {
     reader.readAsDataURL(file);
   };
 
+  // Line alignment. While dragging, a field snaps onto the same line (y) or
+  // column (x) as any other field within SNAP_PX, and a dashed guide shows it.
+  const SNAP_PX = 8;
+  const draggingId = useRef(null); // field being moved (null for a new one from the palette)
+  const [guides, setGuides] = useState({ x: null, y: null });
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const snapPoint = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    let y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    let gx = null;
+    let gy = null;
+    let bestX = (SNAP_PX / rect.width) * 100;
+    let bestY = (SNAP_PX / rect.height) * 100;
+    for (const f of fields) {
+      if (f.id === draggingId.current) continue;
+      if (Math.abs(f.x - x) <= bestX) { bestX = Math.abs(f.x - x); gx = f.x; }
+      if (Math.abs(f.y - y) <= bestY) { bestY = Math.abs(f.y - y); gy = f.y; }
+    }
+    if (gx != null) x = gx;
+    if (gy != null) y = gy;
+    return { x, y, gx, gy };
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    const { gx, gy } = snapPoint(e);
+    setGuides((g) => (g.x === gx && g.y === gy ? g : { x: gx, y: gy }));
+  };
+
+  const clearDrag = () => { draggingId.current = null; setGuides({ x: null, y: null }); };
+
   const handleDrop = (e) => {
     e.preventDefault();
     const data = e.dataTransfer.getData('text/plain');
-    if (!data) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    if (!data) return clearDrag();
+    const { x, y } = snapPoint(e);
     if (data.startsWith('move:')) {
       const id = data.slice(5);
       setFields((arr) => arr.map((f) => (f.id === id ? { ...f, x, y } : f)));
     } else {
       setFields((arr) => [...arr, { id: `${Date.now()}`, type: data, x, y, fontSize: DEFAULT_FONT_SIZE }]);
     }
+    clearDrag();
   };
 
-  const removeField = (id) => setFields((arr) => arr.filter((f) => f.id !== id));
+  // Click a field to select it, Ctrl/Shift-click to add more, then line them
+  // up on the first selected field's line or column.
+  const toggleSelect = (e, id) => {
+    if (e.target.closest('button')) return; // font size / remove buttons
+    const multi = e.ctrlKey || e.metaKey || e.shiftKey;
+    setSelectedIds((ids) => {
+      if (ids.includes(id)) return ids.filter((v) => v !== id);
+      return multi ? [...ids, id] : [id];
+    });
+  };
+  const alignSelected = (axis) => {
+    const anchor = fields.find((f) => f.id === selectedIds[0]);
+    if (!anchor) return;
+    setFields((arr) => arr.map((f) => (selectedIds.includes(f.id) ? { ...f, [axis]: anchor[axis] } : f)));
+  };
+
+  const removeField = (id) => {
+    setFields((arr) => arr.filter((f) => f.id !== id));
+    setSelectedIds((ids) => ids.filter((v) => v !== id));
+  };
 
   const updateFontSize = (id, delta) => {
     setFields((arr) =>
@@ -128,6 +182,8 @@ export default function LetterPadPrescription() {
       setBoundVitals(vitals?.[0] || null);
       const todaysRx = history?.prescriptions?.find((p) => (p.CreatedAt || '').slice(0, 10) === todayStr());
       setBoundMeds(todaysRx?.items || []);
+      setBoundRx(todaysRx || null);
+      if (patient) setSelectedPatient({ ...row, ...patient }); // full pet record for the Patient parameters
       setBoundAge(patient?.Age ?? null);
     } finally {
       setBinding(false);
@@ -138,6 +194,7 @@ export default function LetterPadPrescription() {
     setSelectedPatient(null);
     setBoundVitals(null);
     setBoundMeds([]);
+    setBoundRx(null);
     setBoundAge(null);
   };
 
@@ -187,7 +244,8 @@ export default function LetterPadPrescription() {
                             <div
                               key={p.type}
                               draggable
-                              onDragStart={(e) => e.dataTransfer.setData('text/plain', p.type)}
+                              onDragStart={(e) => { draggingId.current = null; e.dataTransfer.setData('text/plain', p.type); }}
+                              onDragEnd={clearDrag}
                               className={`flex cursor-grab items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium active:cursor-grabbing ${p.paletteClass}`}
                             >
                               <GripVertical size={14} className="shrink-0 opacity-50" />
@@ -250,23 +308,55 @@ export default function LetterPadPrescription() {
                   vitals={boundVitals}
                   meds={boundMeds}
                   age={boundAge}
+                  rx={boundRx}
                 />
               ) : (
+                <>
+                <div className="no-print mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-ink-500">
+                    {selectedIds.length
+                      ? `${selectedIds.length} selected — align to the first one:`
+                      : 'Line up fields: click one, Ctrl+click more, then align. Fields also snap into line while dragging.'}
+                  </span>
+                  {selectedIds.length > 1 && (
+                    <>
+                      <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => alignSelected('y')}>
+                        <AlignHorizontalSpaceAround size={14} /> Same line
+                      </button>
+                      <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => alignSelected('x')}>
+                        <AlignVerticalSpaceAround size={14} /> Same column
+                      </button>
+                    </>
+                  )}
+                  {selectedIds.length > 0 && (
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setSelectedIds([])}>Clear</button>
+                  )}
+                </div>
                 <div
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setGuides({ x: null, y: null }); }}
                   onDrop={handleDrop}
                   className="relative w-full overflow-hidden rounded-lg border border-ink-100 bg-white"
                 >
                   <img src={imageData} alt="Letterhead" className="block w-full select-none" draggable={false} />
+                  {guides.y != null && (
+                    <div className="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-fuchsia-500" style={{ top: `${guides.y}%` }} />
+                  )}
+                  {guides.x != null && (
+                    <div className="pointer-events-none absolute inset-y-0 z-10 border-l border-dashed border-fuchsia-500" style={{ left: `${guides.x}%` }} />
+                  )}
                   {fields.map((f) => {
                     const def = PARAMETER_TYPES.find((p) => p.type === f.type);
                     if (!def) return null; // a field type from before this parameter set changed
                     const Icon = def.icon;
+                    const isSelected = selectedIds.includes(f.id);
                     return (
                       <div
                         key={f.id}
                         draggable
-                        onDragStart={(e) => e.dataTransfer.setData('text/plain', `move:${f.id}`)}
+                        onClick={(e) => toggleSelect(e, f.id)}
+                        onDragStart={(e) => { draggingId.current = f.id; e.dataTransfer.setData('text/plain', `move:${f.id}`); }}
+                        onDragEnd={clearDrag}
                         style={{
                           left: `${f.x}%`,
                           top: `${f.y}%`,
@@ -277,7 +367,7 @@ export default function LetterPadPrescription() {
                           // badge always renders fully inside the image.
                           transform: `translate(${f.x < 15 ? '0' : f.x > 85 ? '-100%' : '-50%'}, ${f.y < 15 ? '0' : f.y > 85 ? '-100%' : '-50%'})`,
                         }}
-                        className={`absolute flex max-w-[85%] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-sm ${def.editBadgeClass}`}
+                        className={`absolute flex max-w-[85%] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-sm ${def.editBadgeClass} ${isSelected ? 'ring-2 ring-fuchsia-500 ring-offset-1' : ''}`}
                       >
                         <Icon size={13} className={`mt-0.5 shrink-0 ${def.iconClass}`} />
                         <div style={{ fontSize: `${f.fontSize || DEFAULT_FONT_SIZE}px` }}>{def.label}</div>
@@ -306,8 +396,9 @@ export default function LetterPadPrescription() {
                     );
                   })}
                 </div>
+                </>
               )}
-              {binding && <div className="mt-3"><Spinner /></div>}
+              {binding &&<div className="mt-3"><Spinner /></div>}
             </div>
           </div>
         </div>

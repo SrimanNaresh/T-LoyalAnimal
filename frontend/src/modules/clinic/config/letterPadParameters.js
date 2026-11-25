@@ -1,4 +1,9 @@
-import { Activity, Pill, Ruler, Weight as WeightIcon, HeartPulse, Thermometer, MessageSquare, Clock, Utensils, CalendarDays, Hash, User, Cake, Phone } from 'lucide-react';
+import {
+  Activity, Pill, Weight as WeightIcon, HeartPulse, Thermometer, MessageSquare, Clock, Utensils, CalendarDays, Hash, User, Cake, Phone,
+  Wind, Timer, Eye, Scan, Droplet, Smile, Stethoscope, ClipboardList, StickyNote, CalendarClock, TestTube,
+  PawPrint, Dog, Users, Palette, UserRound, MapPin, Share2, Building2,
+} from 'lucide-react';
+import { PET_VITAL_FIELDS } from './petVitals.js';
 
 export const DEFAULT_FONT_SIZE = 12;
 export const MIN_FONT_SIZE = 8;
@@ -21,19 +26,38 @@ const ROSE_EDIT_BADGE_CLASS = 'cursor-grab border-rose-300 bg-rose-100 font-semi
 // Shared by the Letter Pad Prescription builder (Coming Up's) and anywhere
 // else a prescription needs to print on the same letterhead template (e.g.
 // Billing -> Patient Bill), so both stay in sync with one source of truth.
+// Pet vitals come straight from the Vital Sign screen's own field list, so
+// every input there is a parameter here. type = the VitalSign column, which
+// keeps templates saved earlier (Weight, PulseRate, Temperature, Comments)
+// working; old human-only fields (Height, Blood Pressure) are dropped.
+const VITAL_ICONS = {
+  Weight: WeightIcon, Temperature: Thermometer, PulseRate: Activity, HeartRate: HeartPulse,
+  RespiratoryRate: Wind, CRP: Timer, STT: Eye, SkinCoat: Scan, CMM: Droplet, VMM: Droplet,
+  OralCavity: Smile, AbdominalExam: Stethoscope, RectalExam: Stethoscope,
+};
+const VITAL_PARAMS = [
+  ...PET_VITAL_FIELDS.map((f) => ({
+    type: f.col, label: f.label.replace(/\s*\(.*\)$/, ''), vitalKey: f.col, unit: f.unit || '', icon: VITAL_ICONS[f.col] || Activity,
+  })),
+  { type: 'Comments', label: 'Comments', vitalKey: 'Comments', unit: '', icon: MessageSquare },
+].map((p) => ({ ...p, group: 'Vital Sign', paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS }));
+
+// Examine screen inputs outside medicines and vitals (violet).
+const EXAM_STYLE = {
+  group: 'Examination', paletteClass: 'border-violet-200 bg-violet-50 text-violet-700', iconClass: 'text-violet-600',
+  editBadgeClass: 'cursor-grab border-violet-300 bg-violet-100 font-semibold text-violet-800 active:cursor-grabbing',
+};
+const EXAM_PARAMS = [
+  { type: 'CaseHistory', label: 'History', icon: ClipboardList },
+  { type: 'Observation', label: 'Observation', icon: Eye },
+  { type: 'Notes', label: 'Notes / Advice', icon: StickyNote },
+  { type: 'NextVisitDate', label: 'Next Visit Date', icon: CalendarClock },
+  { type: 'LabTests', label: 'Lab Tests', icon: TestTube },
+].map((p) => ({ ...p, ...EXAM_STYLE }));
+
 export const PARAMETER_TYPES = [
-  { type: 'Height', label: 'Height', group: 'Vital Sign', vitalKey: 'Height', unit: 'cm', icon: Ruler,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
-  { type: 'Weight', label: 'Weight', group: 'Vital Sign', vitalKey: 'Weight', unit: 'kg', icon: WeightIcon,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
-  { type: 'BloodPressure', label: 'Blood Pressure', group: 'Vital Sign', vitalKey: 'BloodPressure', unit: '', icon: HeartPulse,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
-  { type: 'PulseRate', label: 'Pulse Rate', group: 'Vital Sign', vitalKey: 'PulseRate', unit: 'bpm', icon: Activity,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
-  { type: 'Temperature', label: 'Temperature', group: 'Vital Sign', vitalKey: 'Temperature', unit: '°C', icon: Thermometer,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
-  { type: 'Comments', label: 'Comments', group: 'Vital Sign', vitalKey: 'Comments', unit: '', icon: MessageSquare,
-    paletteClass: ROSE_PALETTE_CLASS, iconClass: ROSE_ICON_CLASS, editBadgeClass: ROSE_EDIT_BADGE_CLASS },
+  ...VITAL_PARAMS,
+  ...EXAM_PARAMS,
 
   // Medicine columns — same split-per-field approach as Vital Sign, and the
   // same color coding as the Medications table itself: Medicine Name and
@@ -53,18 +77,25 @@ export const PARAMETER_TYPES = [
 
   // Patient Details — sourced from the patient record itself (teal, distinct
   // from vitals/medicine), each its own draggable parameter.
-  { type: 'PatientId', label: 'ID', group: 'Patient', icon: Hash,
+  // Every input on the Pet Registration screen, in the same order.
+  ...[
+    { type: 'PatientId', label: 'Pet ID', icon: Hash },
+    { type: 'PatientName', label: 'Pet Name', icon: User },
+    { type: 'Species', label: 'Species', icon: PawPrint },
+    { type: 'Breed', label: 'Breed', icon: Dog },
+    { type: 'Gender', label: 'Gender', icon: Users },
+    { type: 'Age', label: 'Age', icon: Cake },
+    { type: 'Color', label: 'Color / Markings', icon: Palette },
+    { type: 'OwnerName', label: 'Owner Name', icon: UserRound },
+    { type: 'MobileNo', label: 'Mobile No', icon: Phone },
+    { type: 'Address', label: 'Address', icon: MapPin },
+    { type: 'ReferralType', label: 'Referral', icon: Share2 },
+    { type: 'ReferredBy', label: 'Clinic or Hospital Name', icon: Building2 },
+  ].map((p) => ({
+    ...p, group: 'Patient',
     paletteClass: 'border-teal-200 bg-teal-50 text-teal-700', iconClass: 'text-teal-600',
-    editBadgeClass: 'cursor-grab border-teal-300 bg-teal-100 font-semibold text-teal-800 active:cursor-grabbing' },
-  { type: 'PatientName', label: 'Patient Name', group: 'Patient', icon: User,
-    paletteClass: 'border-teal-200 bg-teal-50 text-teal-700', iconClass: 'text-teal-600',
-    editBadgeClass: 'cursor-grab border-teal-300 bg-teal-100 font-semibold text-teal-800 active:cursor-grabbing' },
-  { type: 'Age', label: 'Age', group: 'Patient', icon: Cake,
-    paletteClass: 'border-teal-200 bg-teal-50 text-teal-700', iconClass: 'text-teal-600',
-    editBadgeClass: 'cursor-grab border-teal-300 bg-teal-100 font-semibold text-teal-800 active:cursor-grabbing' },
-  { type: 'MobileNo', label: 'Mobile No', group: 'Patient', icon: Phone,
-    paletteClass: 'border-teal-200 bg-teal-50 text-teal-700', iconClass: 'text-teal-600',
-    editBadgeClass: 'cursor-grab border-teal-300 bg-teal-100 font-semibold text-teal-800 active:cursor-grabbing' },
+    editBadgeClass: 'cursor-grab border-teal-300 bg-teal-100 font-semibold text-teal-800 active:cursor-grabbing',
+  })),
 ];
 
 const TIMING_ORDER = ['Morning', 'Afternoon', 'Evening', 'Night'];
@@ -73,19 +104,49 @@ export const frequencyToCode = (frequency) => {
   return TIMING_ORDER.map((t) => (chosen.includes(t) ? '1' : '0')).join('-');
 };
 
+// Printed values only — the letterhead's own position for each field says
+// what it is, so the parameter name ("Weight:", "Patient Name:") is not printed.
 export const fmtVitalValue = (def, vitals) => {
   const v = vitals?.[def.vitalKey];
-  if (!v) return `${def.label}: -`;
-  return `${def.label}: ${v}${def.unit ? ` ${def.unit}` : ''}`;
+  if (!v) return '-';
+  return `${v}${def.unit ? ` ${def.unit}` : ''}`;
 };
 
-// Patient identity fields expect { PatientId, PatientName, MobileNo } — Age
-// is passed separately since it doesn't come from the same source record
-// on every screen that binds this template to a patient.
+// Pet fields read from the Patient record (GET /patients/:id), so callers pass
+// the full row; PatientName is also accepted for the pet's name.
+const val = (v) => (v == null || String(v).trim() === '' ? '-' : String(v));
+export const fmtPetAge = (patient) =>
+  patient?.Age == null ? '-' : `${patient.Age} ${patient.AgeUnit === 'Months' ? 'Months' : 'Years'}`;
 export const PATIENT_FIELD_GETTERS = {
-  PatientId: (patient) => `ID: ${patient?.PatientId ?? '-'}`,
-  PatientName: (patient) => `Patient Name: ${patient?.PatientName ?? '-'}`,
-  MobileNo: (patient) => `Mobile No: ${patient?.MobileNo ?? '-'}`,
+  PatientId: (p) => (p?.PatientId != null ? `P-${p.PatientId}` : '-'),
+  PatientName: (p) => val(p?.Name ?? p?.PatientName),
+  Species: (p) => val(p?.Species),
+  Breed: (p) => val(p?.Breed),
+  Gender: (p) => val(p?.Gender),
+  Age: (p) => fmtPetAge(p),
+  Color: (p) => val(p?.Color),
+  OwnerName: (p) => val(p?.OwnerName),
+  MobileNo: (p) => val(p?.MobileNo),
+  Address: (p) => val(p?.Address),
+  ReferralType: (p) => (p?.ReferralType === 'Patient' ? 'Existing Client' : val(p?.ReferralType)),
+  ReferredBy: (p) => val(p?.ReferredBy),
+};
+
+// Examination fields read from the prescription:
+// { CaseHistory, Observation, Notes, NextVisitDate, labTests: [{ TestName }] }.
+export const EXAM_FIELD_GETTERS = {
+  CaseHistory: (rx) => rx?.CaseHistory || '-',
+  Observation: (rx) => rx?.Observation || '-',
+  Notes: (rx) => rx?.Notes || '-',
+  NextVisitDate: (rx) => {
+    const v = rx?.NextVisitDate;
+    if (!v) return '-';
+    // "2026-11-27", an ISO timestamp or a Date — read the calendar day, no timezone shift.
+    const day = v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+    const d = new Date(`${day}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString();
+  },
+  LabTests: (rx) => rx?.labTests?.map((t) => t.TestName).filter(Boolean).join(', ') || '-',
 };
 
 export const MED_FIELD_GETTERS = {

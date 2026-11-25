@@ -10,6 +10,7 @@ import { emptyForm } from './ItemForm.jsx';
 import ScanBillModal from './ScanBillModal.jsx';
 import { compact, likeness } from '../utils/billScan.js';
 import { pRateOf, purchaseLine, round2, roundOffOf, selAmount } from '../utils/purchaseCalc.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
 // Pharmacy > Stock In > Three in One (IPS): Item, Purchase and Stock in one
 // entry. Scan the supplier's bill (or type the lines), check the table — its
@@ -26,7 +27,7 @@ import { pRateOf, purchaseLine, round2, roundOffOf, selAmount } from '../utils/p
 
 const MAX_GST = 28;
 const pad = (n) => String(n).padStart(2, '0');
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 const money = (n) => (Number(n) || 0).toFixed(2);
 const numStr = (v) => (v == null || v === '' ? '' : String(Number(v)));

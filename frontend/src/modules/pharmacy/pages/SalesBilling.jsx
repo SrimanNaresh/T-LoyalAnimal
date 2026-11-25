@@ -11,8 +11,9 @@ import { useToast } from '../../../hooks/useToast.js';
 import { pharmacyItemApi, salesBillingApi, clinicApi } from '../api.js';
 import { linkApi } from '../../../api/client.js';
 import { unitsPerPack, saleLineAmount, saleBill, roundOffOf } from '../utils/purchaseCalc.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const money = (n) => (Number(n) || 0).toFixed(2);
 const round2 = (n) => Math.round(n * 100) / 100;
 // Expiry as MM/YY, like Stock In, so the batch label fits its column.

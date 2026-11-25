@@ -5,11 +5,14 @@ import { PageHeader, Toast, Spinner, EmptyState, CardHeader } from '../../../../
 import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import PatientPicker from '../../components/PatientPicker.jsx';
-import PetVitalSummary from '../../components/PetVitalSummary.jsx';
+import HistoryReportDay from '../../components/HistoryReportDay.jsx';
+import PetVitalFields from '../../components/PetVitalFields.jsx';
+import { PET_VITAL_FIELDS, petVitalsFromRow, petVitalsPayload } from '../../config/petVitals.js';
 import SearchSelect from '../../../../components/SearchSelect.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
-import { prescriptionApi, confirmApi, clinicApi, patientApi, patientDocumentApi } from '../../api.js';
+import { prescriptionApi, confirmApi, clinicApi, patientApi, patientDocumentApi, vitalApi } from '../../api.js';
 import { linkApi } from '../../../../api/client.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
 // Timing options with short labels (shown) + full names (tooltip / stored).
 const TIMINGS = [
@@ -24,11 +27,14 @@ const emptyItem = { medicineName: '', timing: [], food: [], days: '' };
 const timingToCode = (timing) => TIMINGS.map((t) => (timing.includes(t.full) ? '1' : '0')).join('-');
 const fmt = (d) => (d ? new Date(d).toLocaleString() : '-');
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-');
-const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : 'unknown');
+// Local calendar date (YYYY-MM-DD). toISOString() would use UTC and put early-morning
+// records (before 5:30 AM in India) on the previous day.
+const dateKey = (d) => (d ? localDateKey(new Date(d)) : 'unknown');
 const dateLabel = (key) => (key === 'unknown' ? 'Unknown date' : new Date(`${key}T00:00:00`).toLocaleDateString());
-const currentDateKey = () => new Date().toISOString().slice(0, 10);
+const currentDateKey = () => localDateKey(new Date());
 const EXAMINE_TABS = [
   { id: 'vitals', label: 'Current Vital Signs', icon: Activity },
+  { id: 'case', label: 'History & Observation', icon: ClipboardList },
   { id: 'meds', label: 'Medications / Lab Test', icon: Pill },
   { id: 'history', label: 'Patient History', icon: History },
 ];
@@ -38,6 +44,8 @@ export default function Prescription() {
   const { toast, show } = useToast();
   const [selected, setSelected] = useState(location.state?.patient || null);
   const [notes, setNotes] = useState('');
+  const [caseHistory, setCaseHistory] = useState('');
+  const [observation, setObservation] = useState('');
   const [items, setItems] = useState([{ ...emptyItem }]);
   const [nextVisitDate, setNextVisitDate] = useState('');
   const [meds, setMeds] = useState([]);
@@ -51,11 +59,13 @@ export default function Prescription() {
   const [editingPrescription, setEditingPrescription] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [patientAge, setPatientAge] = useState(null);
+  const [petRecord, setPetRecord] = useState(null); // full Patient row, for the Letter Pad print
   const [docs, setDocs] = useState([]);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [sending, setSending] = useState(false);
   // Examine screen tabs; Notes and the Hold / Completed buttons stay visible on every tab.
   const [tab, setTab] = useState('vitals');
+  const [vitalEdit, setVitalEdit] = useState(null); // form values while editing today's vitals
   // Left-side tabs inside Medications / Lab Test.
   const [medsTab, setMedsTab] = useState('meds');
   useEffect(() => { setTab('vitals'); setMedsTab('meds'); }, [selected?.PatientId]);
@@ -122,7 +132,7 @@ export default function Prescription() {
         if (autoEditToday) {
           const todays = data.prescriptions?.find((p) => dateKey(p.CreatedAt) === currentDateKey());
           if (todays) editPrescription(todays);
-          else { setEditingPrescription(null); setNotes(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }
+          else { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }
         }
       })
       .catch(() => setHistory(null))
@@ -131,13 +141,16 @@ export default function Prescription() {
   }, []);
 
   useEffect(() => {
+    setVitalEdit(null);
     if (selected) loadHistory(selected.PatientId, { autoEditToday: true });
     else setHistory(null);
   }, [selected, loadHistory]);
 
   useEffect(() => {
-    if (!selected) return setPatientAge(null);
-    patientApi.get(selected.PatientId).then((p) => setPatientAge(p.Age)).catch(() => setPatientAge(null));
+    if (!selected) { setPetRecord(null); return setPatientAge(null); }
+    patientApi.get(selected.PatientId)
+      .then((p) => { setPatientAge(p.Age); setPetRecord(p); })
+      .catch(() => { setPatientAge(null); setPetRecord(null); });
   }, [selected]);
 
   // Attachments (lab reports/scans from Vital Sign) — shown per-date
@@ -167,6 +180,8 @@ export default function Prescription() {
   const editPrescription = (prescription) => {
     setEditingPrescription(prescription);
     setNotes(prescription.Notes || '');
+    setCaseHistory(prescription.CaseHistory || '');
+    setObservation(prescription.Observation || '');
     setItems(prescription.items?.length ? prescription.items.map((item) => ({
       medicineName: item.MedicineName || '',
       timing: item.Frequency ? item.Frequency.split(',').map((value) => value.trim()).filter(Boolean) : [],
@@ -195,6 +210,46 @@ export default function Prescription() {
       Duration: it.days ? `${it.days} day(s)` : '',
     }));
   const todaysVitals = history?.vitals?.find((v) => dateKey(v.RecordedAt) === currentDateKey()) || null;
+
+  // Patient History, one entry per visit date (newest first). Attachment-only
+  // dates (e.g. a lab report dropped off with no visit) get their own entry too.
+  const historyDates = !history ? [] : [...new Set([
+    ...history.vitals.map((v) => dateKey(v.RecordedAt)),
+    ...history.prescriptions.map((p) => dateKey(p.CreatedAt)),
+    ...docs.map((d) => dateKey(d.DocumentDate)),
+  ])]
+    .sort((a, b) => b.localeCompare(a))
+    .map((date) => ({
+      date,
+      vitals: history.vitals.filter((v) => dateKey(v.RecordedAt) === date),
+      prescriptions: history.prescriptions.filter((p) => dateKey(p.CreatedAt) === date),
+      docs: docs.filter((d) => dateKey(d.DocumentDate) === date),
+    }));
+  // Which dates are expanded; null = default (only the newest date open).
+  const [openDates, setOpenDates] = useState(null);
+  useEffect(() => { setOpenDates(null); }, [selected?.PatientId]);
+
+  // Print binds today's details. What's on screen wins while it's being
+  // entered or edited; once the form is empty (e.g. after Hold) it falls back
+  // to today's saved prescription, so Print never comes out blank.
+  const formHasContent = !!editingPrescription || printMeds.length > 0 || !!caseHistory.trim() || !!observation.trim()
+    || !!notes.trim() || !!nextVisitDate || selectedTestIds.length > 0;
+  const todaysRx = history?.prescriptions
+    ?.filter((p) => dateKey(p.CreatedAt) === currentDateKey())
+    .sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt))[0] || null;
+  const printRx = formHasContent
+    ? { CaseHistory: caseHistory, Observation: observation, Notes: notes, NextVisitDate: nextVisitDate, labTests: selectedTestNames.map((TestName) => ({ TestName })) }
+    : todaysRx;
+  const printItems = formHasContent ? printMeds : todaysRx?.items || [];
+  // Vitals as typed on the Current Vital Signs tab (saved or not), in VitalSign column shape.
+  const printVitals = vitalEdit
+    ? { ...todaysVitals, ...Object.fromEntries(PET_VITAL_FIELDS.map((f) => [f.col, vitalEdit[f.key]])), Comments: vitalEdit.comments }
+    : todaysVitals;
+
+  // Today's vitals are always open for editing: load the saved values whenever they (re)load.
+  useEffect(() => {
+    setVitalEdit(todaysVitals ? petVitalsFromRow(todaysVitals) : null);
+  }, [todaysVitals]);
 
   const printPrescription = () => {
     if (!clinic?.PrescriptionAttachment) {
@@ -229,6 +284,14 @@ export default function Prescription() {
 
     setSaving(true);
     try {
+      // Today's vitals are edited in place on the Vitals tab; save them with the same button.
+      if (todaysVitals && vitalEdit) {
+        const norm = (o) => JSON.stringify(Object.entries(o).map(([k, v]) => [k, v == null ? null : String(v)]));
+        const payload = petVitalsPayload(vitalEdit);
+        if (norm(payload) !== norm(petVitalsPayload(petVitalsFromRow(todaysVitals)))) {
+          await vitalApi.update(todaysVitals.VitalId, payload);
+        }
+      }
       // Map timing checkboxes -> Frequency, food checkboxes -> Instructions.
       const payloadItems = items
         .filter((it) => it.medicineName.trim())
@@ -239,13 +302,13 @@ export default function Prescription() {
           duration: it.days ? `${it.days} day(s)` : '',
         }));
       if (editingPrescription) {
-        await prescriptionApi.update(editingPrescription.PrescriptionId, { notes, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
+        await prescriptionApi.update(editingPrescription.PrescriptionId, { notes, caseHistory, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
       } else {
-        await prescriptionApi.create({ patientId: selected.PatientId, notes, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
+        await prescriptionApi.create({ patientId: selected.PatientId, notes, caseHistory, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
       }
       show(complete ? 'Prescription completed' : editingPrescription ? 'Prescription updated' : 'Prescription saved', 'success');
 
-      setNotes(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false);
+      setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false);
       setEditingPrescription(null);
       if (complete) setSelected(null);
       loadReadyList();
@@ -297,7 +360,7 @@ export default function Prescription() {
     setSending(true);
     try {
       const { buildPrescriptionPdf } = await import('../../utils/prescriptionPdf.jsx');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = currentDateKey();
       const pdfBlob = await buildPrescriptionPdf({
         clinic, patient: selected, patientAge, items, notes, date: new Date().toLocaleString(), nextVisitDate, labTestNames: selectedTestNames,
       });
@@ -331,7 +394,7 @@ export default function Prescription() {
     <div>
       <PageHeader title="Examine" />
 
-      <div className="space-y-5">
+      <div className={selected ? 'space-y-2' : 'space-y-5'}>
         {!selected ? (
           showSearch ? (
             <div className="space-y-3">
@@ -456,24 +519,22 @@ export default function Prescription() {
           )
         ) : (
           <>
-            <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-brand-800">
-                  {selected.Name || `${selected.OwnerName || 'Owner'}'s pet`}
-                  {(selected.Species || selected.Breed) && (
-                    <span className="ml-1.5 font-normal text-brand-600">({[selected.Species, selected.Breed].filter(Boolean).join(' · ')})</span>
-                  )}
-                </p>
-                <p className="text-xs text-brand-600">
+            <div className="no-print flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5">
+              <p className="min-w-0 text-sm">
+                <span className="font-semibold text-brand-800">{selected.Name || `${selected.OwnerName || 'Owner'}'s pet`}</span>
+                {(selected.Species || selected.Breed) && (
+                  <span className="ml-1.5 text-brand-600">({[selected.Species, selected.Breed].filter(Boolean).join(' · ')})</span>
+                )}
+                <span className="ml-2 text-xs text-brand-600">
                   {selected.OwnerName ? `Owner: ${selected.OwnerName} · ` : ''}{selected.MobileNo || 'No mobile'} · ID #{selected.PatientId}
-                </p>
-              </div>
-              <button className="btn-secondary" onClick={() => setSelected(null)}>
-                <ArrowLeft size={16} /> Change pet
+                </span>
+              </p>
+              <button type="button" className="btn-secondary !px-2.5 !py-1 text-xs" onClick={() => setSelected(null)}>
+                <ArrowLeft size={14} /> Change pet
               </button>
             </div>
 
-            <div className="no-print flex gap-1 overflow-x-auto rounded-xl border border-ink-100 bg-white p-1" role="tablist">
+            <div className="no-print flex gap-1 overflow-x-auto rounded-lg border border-ink-100 bg-white p-0.5" role="tablist">
               {EXAMINE_TABS.map((t) => (
                 <button
                   key={t.id}
@@ -481,23 +542,30 @@ export default function Prescription() {
                   role="tab"
                   aria-selected={tab === t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
                     tab === t.id ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <t.icon size={16} /> {t.label}
+                  <t.icon size={14} /> {t.label}
                 </button>
               ))}
             </div>
 
             {tab === 'vitals' && (
-              <div className="no-print card">
+              <div className="no-print card !pb-3 sm:!pb-4">
                 {todaysVitals ? (
                   <>
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
                       Current Vital Signs <span className="font-normal normal-case text-slate-400">· recorded {fmtTime(todaysVitals.RecordedAt)}</span>
                     </p>
-                    <PetVitalSummary vital={todaysVitals} showAll />
+                    {vitalEdit && (
+                      <PetVitalFields
+                        idPrefix="pv-rx-edit"
+                        withComments
+                        values={vitalEdit}
+                        onChange={(k, v) => setVitalEdit((e) => ({ ...e, [k]: v }))}
+                      />
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-slate-400">No vital signs recorded today for this pet.</p>
@@ -505,111 +573,75 @@ export default function Prescription() {
               </div>
             )}
 
+            {tab === 'case' && (
+              <div className="no-print card !pb-3 sm:!pb-4 grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="examine-case-history">History</label>
+                  <textarea
+                    id="examine-case-history"
+                    className="input"
+                    rows={3}
+                    maxLength={2000}
+                    value={caseHistory}
+                    onChange={(e) => setCaseHistory(e.target.value)}
+                    placeholder="e.g. Inappetence, dull, vomiting"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="examine-observation">Observation</label>
+                  <textarea
+                    id="examine-observation"
+                    className="input"
+                    rows={3}
+                    maxLength={2000}
+                    value={observation}
+                    onChange={(e) => setObservation(e.target.value)}
+                    placeholder="Clinical observation"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 md:col-span-2">Saved with the prescription when you click Hold or Completed.</p>
+              </div>
+            )}
+
             {tab === 'history' && (
-              <div className="no-print card">
-                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <History size={16} /> Patient History
-                </h3>
+              <div className="no-print card !pb-3 sm:!pb-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <History size={16} /> Patient History
+                    {historyDates.length > 0 && <span className="text-xs font-normal text-slate-400">{historyDates.length} visit date{historyDates.length === 1 ? '' : 's'}</span>}
+                  </h3>
+                  {historyDates.length > 1 && (
+                    <div className="flex gap-1">
+                      <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setOpenDates(historyDates.map((g) => g.date))}>Expand all</button>
+                      <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setOpenDates([])}>Collapse all</button>
+                    </div>
+                  )}
+                </div>
                 {loadingHistory ? (
                   <Spinner />
                 ) : !history ? (
                   <p className="text-sm text-slate-400">No history available.</p>
                 ) : (
-                  <div className="space-y-5">
-                    {Object.values(
-                      [...history.vitals.map((v) => ({ ...v, recordType: 'vital', recordDate: v.RecordedAt })),
-                        ...history.prescriptions.map((p) => ({ ...p, recordType: 'prescription', recordDate: p.CreatedAt })),
-                        // Attachment-only dates (e.g. a lab report dropped off with no
-                        // visit that day) still need their own section — these entries
-                        // only exist to seed that date's group key.
-                        ...docs.map((d) => ({ recordType: 'attachment', recordDate: d.DocumentDate }))]
-                        .reduce((groups, record) => {
-                          const key = dateKey(record.recordDate);
-                          (groups[key] ||= []).push(record);
-                          return groups;
-                        }, {})
-                    )
-                      .sort((a, b) => dateKey(b[0].recordDate).localeCompare(dateKey(a[0].recordDate)))
-                      .map((records) => {
-                        const date = dateKey(records[0].recordDate);
-                        const notes = records.filter((record) => record.Notes || record.Comments);
-                        const vitals = records.filter((record) => record.recordType === 'vital');
-                        const prescriptions = records.filter((record) => record.recordType === 'prescription');
-                        const dateDocs = docs.filter((d) => dateKey(d.DocumentDate) === date);
+                  <div className="-mr-2 max-h-[calc(100vh-19rem)] min-h-[12rem] space-y-2 overflow-y-auto overscroll-contain pr-2">
+                    {historyDates.map(({ date, vitals, prescriptions, docs: dateDocs }) => {
                         return (
-                          <section key={date} className={`rounded-lg border p-4 ${date === currentDateKey() ? 'border-brand-200 bg-brand-50/30' : 'border-slate-100'}`}>
-                            <div className="mb-4 flex flex-wrap items-center gap-2">
-                              <h4 className="text-sm font-bold text-slate-700">{dateLabel(date)}</h4>
-                              {date === currentDateKey() && <span className="badge bg-brand-100 text-brand-700">Current Date</span>}
-                            </div>
-
-                            <div className="space-y-4">
-                              <div>
-                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</p>
-                                {notes.length === 0 ? <p className="text-sm text-slate-400">No notes recorded.</p> : (
-                                  <div className="space-y-1 text-sm text-slate-600">
-                                    {notes.map((record) => <p key={`${record.recordType}-${record.VitalId || record.PrescriptionId}`}>{record.Notes || record.Comments}</p>)}
-                                  </div>
-                                )}
-                              </div>
-
-                              {date !== currentDateKey() && <div>
-                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Activity size={14} /> Vital Signs</p>
-                                {vitals.length === 0 ? <p className="text-sm text-slate-400">No vitals recorded.</p> : (
-                                  <div className="space-y-2">
-                                    {vitals.map((v) => (
-                                      <div key={v.VitalId} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                                        <span className="text-xs text-slate-400">{fmt(v.RecordedAt)}</span>
-                                        <div className="mt-2"><PetVitalSummary vital={v} /></div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>}
-
-                              <div>
-                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Pill size={14} /> Prescriptions</p>
-                                {prescriptions.length === 0 ? <p className="text-sm text-slate-400">No prescriptions recorded.</p> : (
-                                  <div className="space-y-3">
-                                    {prescriptions.map((p) => (
-                                      <div key={p.PrescriptionId} className="rounded-lg bg-slate-50 p-3">
-                                        <div className="flex items-center justify-between gap-2"><p className="text-xs text-slate-400">{fmt(p.CreatedAt)}</p>{date === currentDateKey() && <div className="flex gap-1"><button type="button" className="btn-ghost px-2 py-1" title="Edit prescription" onClick={() => { editPrescription(p); setTab('meds'); }}><Pencil size={14} /></button><button type="button" className="btn-ghost px-2 py-1 text-red-500 hover:bg-red-50" title="Delete prescription" onClick={() => deletePrescription(p)}><Trash2 size={14} /></button></div>}</div>
-                                        {p.items?.length > 0 && <ul className="mt-2 space-y-1">{p.items.map((it) => <li key={it.ItemId} className="text-sm text-slate-600">{it.MedicineName}{it.Frequency && ` — ${it.Frequency}`}{it.Instructions && ` · ${it.Instructions}`}{it.Duration && ` · ${it.Duration}`}</li>)}</ul>}
-                                        {p.NextVisitDate && <p className="mt-2 text-xs font-medium text-brand-700">Next Visit: {new Date(p.NextVisitDate).toLocaleDateString()}</p>}
-                                        {p.labTests?.length > 0 && (
-                                          <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {p.labTests.map((t) => (
-                                              <span key={t.Id} className="badge bg-violet-100 text-violet-700">{t.TestName}</span>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div>
-                                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"><Paperclip size={14} /> Attachments</p>
-                                {dateDocs.length === 0 ? <p className="text-sm text-slate-400">No attachments for this date.</p> : (
-                                  <div className="space-y-2">
-                                    {dateDocs.map((d) => (
-                                      <div key={d.DocumentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium text-slate-700">{d.FileName}</p>
-                                          <p className="text-xs text-slate-400">{d.Category || 'Document'}</p>
-                                        </div>
-                                        <div className="flex shrink-0 gap-1">
-                                          <button type="button" className="btn-ghost px-2 py-1" title="Preview" onClick={() => setPreviewDoc(d)}><Eye size={14} /></button>
-                                          <button type="button" className="btn-ghost px-2 py-1" title="Download" onClick={() => patientDocumentApi.download(d.DocumentId, d.FileName)}><Download size={14} /></button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </section>
+                          <HistoryReportDay
+                            key={date}
+                            dateLabel={dateLabel(date)}
+                            isToday={date === currentDateKey()}
+                            open={(openDates ?? [historyDates[0]?.date]).includes(date)}
+                            onToggle={() => setOpenDates((cur) => {
+                              const list = cur ?? [historyDates[0]?.date];
+                              return list.includes(date) ? list.filter((d) => d !== date) : [...list, date];
+                            })}
+                            vitals={vitals}
+                            prescriptions={prescriptions}
+                            docs={dateDocs}
+                            onEdit={(p) => { editPrescription(p); setTab('meds'); }}
+                            onDelete={deletePrescription}
+                            onPreview={setPreviewDoc}
+                            onDownload={(d) => patientDocumentApi.download(d.DocumentId, d.FileName)}
+                          />
                         );
                       })}
                     {history.vitals.length === 0 && history.prescriptions.length === 0 && docs.length === 0 && <p className="text-sm text-slate-400">No records available.</p>}
@@ -618,21 +650,22 @@ export default function Prescription() {
               </div>
             )}
 
-            <form onSubmit={(e) => submit(e, false)} className="card">
+            <form onSubmit={(e) => submit(e, false)} className="card !pb-3 sm:!pb-4">
               <div className="hidden print:block">
                 <LetterPadBoundView
                   imageData={clinic?.PrescriptionAttachment}
                   pageHeight={clinic?.AttachmentHeight}
                   pageWidth={clinic?.AttachmentWidth}
                   fields={letterPadFields}
-                  patient={{ PatientId: selected.PatientId, PatientName: selected.Name, MobileNo: selected.MobileNo }}
-                  vitals={todaysVitals}
-                  meds={printMeds}
+                  patient={{ PatientId: selected.PatientId, PatientName: selected.Name, MobileNo: selected.MobileNo, ...(petRecord?.PatientId === selected.PatientId ? petRecord : {}) }}
+                  vitals={printVitals}
+                  meds={printItems}
                   age={patientAge}
+                  rx={printRx}
                 />
               </div>
 
-              <div className={tab === 'meds' ? 'mb-5 flex flex-col gap-4 md:flex-row' : 'hidden print:block'}>
+              <div className={tab === 'meds' ? 'mb-3 flex flex-col gap-4 md:flex-row' : 'hidden print:block'}>
                 <nav className="no-print flex shrink-0 gap-1 md:w-48 md:flex-col md:border-r md:border-ink-100 md:pr-3" aria-label="Medications and lab tests">
                   {[
                     { id: 'meds', label: 'Medications', icon: Pill, count: items.filter((it) => it.medicineName).length },
@@ -798,39 +831,38 @@ export default function Prescription() {
                 </div>
               </div>
 
-              {/* Common to all tabs: Notes and Next Visit Date on one row */}
-              <div className="no-print grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+              {/* Common to all tabs: Notes, Next Visit Date and the save buttons on one row */}
+              <div className="no-print grid grid-cols-1 items-end gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto]">
                 <div>
                   <label className="label" htmlFor="examine-notes">Notes</label>
                   <textarea
                     id="examine-notes"
                     className="input"
-                    rows={3}
+                    rows={2}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="General notes / advice"
                   />
                 </div>
-                <div>
-                  <label className="label" htmlFor="examine-next-visit">Next Visit Date</label>
-                  <input
-                    id="examine-next-visit"
-                    type="date"
-                    className="input"
-                    value={nextVisitDate}
-                    onChange={(e) => setNextVisitDate(e.target.value)}
-                  />
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="w-40">
+                    <label className="label" htmlFor="examine-next-visit">Next Visit Date</label>
+                    <input
+                      id="examine-next-visit"
+                      type="date"
+                      className="input"
+                      value={nextVisitDate}
+                      onChange={(e) => setNextVisitDate(e.target.value)}
+                    />
+                  </div>
+                  <button type="submit" className="btn-secondary" disabled={saving}>
+                    <Save size={16} /> {saving ? 'Holding...' : 'Hold'}
+                  </button>
+                  <button type="button" className="btn-primary" disabled={saving} onClick={(e) => submit(e, true)}>
+                    <CheckCircle2 size={16} /> Completed
+                  </button>
+                  {editingPrescription && <button type="button" className="btn-ghost" disabled={saving} onClick={() => { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }}>Cancel Edit</button>}
                 </div>
-              </div>
-
-              <div className="no-print mt-5 flex justify-end gap-2">
-                <button type="submit" className="btn-secondary" disabled={saving}>
-                  <Save size={16} /> {saving ? 'Holding...' : 'Hold'}
-                </button>
-                <button type="button" className="btn-primary" disabled={saving} onClick={(e) => submit(e, true)}>
-                  <CheckCircle2 size={16} /> Completed
-                </button>
-                {editingPrescription && <button type="button" className="btn-ghost" disabled={saving} onClick={() => { setEditingPrescription(null); setNotes(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }}>Cancel Edit</button>}
               </div>
             </form>
 

@@ -11,9 +11,10 @@ import { useAuth } from '../../../context/AuthContext.jsx';
 import { stockInApi, vendorApi } from '../api.js';
 import { usePhoneFit, PhoneFooter } from '../../../components/PhoneLayout.jsx';
 import { selAmount, purchaseLine, round2, unitsPerPack } from '../utils/purchaseCalc.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
 const pad = (n) => String(n).padStart(2, '0');
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 const monthOf = (iso) => (iso ? String(iso).slice(0, 7) : '');
 const money = (n) => (Number(n) || 0).toFixed(2);

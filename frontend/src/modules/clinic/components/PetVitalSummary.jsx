@@ -53,7 +53,7 @@ export default function PetVitalSummary({ vital, showAll = false }) {
   return (
     <div className="space-y-2">
       {readings.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
           {readings.map((f) => <Tile key={f.key} f={f} vital={vital} />)}
         </div>
       )}

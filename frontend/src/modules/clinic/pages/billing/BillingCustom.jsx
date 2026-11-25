@@ -4,8 +4,9 @@ import { PageHeader, CardHeader, Toast } from '../../../../components/ui.jsx';
 import BillingReportTable from '../../components/BillingReportTable.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { billingApi } from '../../api.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateKey();
 
 export default function BillingCustom() {
   const { toast, show } = useToast();

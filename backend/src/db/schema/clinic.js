@@ -102,6 +102,9 @@ CREATE TABLE Prescription (
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name='NextVisitDate' AND Object_ID=Object_ID('Prescription'))
     ALTER TABLE Prescription ADD NextVisitDate DATE NULL;
+-- Pet clinic: presenting history (e.g. inappetence, dull, vomiting) and doctor's observation.
+IF COL_LENGTH('dbo.Prescription','CaseHistory') IS NULL ALTER TABLE Prescription ADD CaseHistory NVARCHAR(2000) NULL;
+IF COL_LENGTH('dbo.Prescription','Observation') IS NULL ALTER TABLE Prescription ADD Observation NVARCHAR(2000) NULL;
 
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='PrescriptionItem' AND xtype='U')
 CREATE TABLE PrescriptionItem (

@@ -9,11 +9,12 @@ import { Spinner, EmptyState } from '../../../components/ui.jsx';
 import { patientApi, employeeApi, userApi, confirmApi, prescriptionApi, billingApi } from '../api.js';
 import { linkApi } from '../../../api/client.js';
 import { QuickActionsPanel } from '../components/DashboardKit.jsx';
+import { localDateKey } from '../../../utils/localDate.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const firstOfMonth = () => {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return localDateKey(new Date(d.getFullYear(), d.getMonth(), 1));
 };
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-');
 const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;

@@ -5,11 +5,12 @@ import { useToast } from '../../../../hooks/useToast.js';
 import { vitalApi } from '../../api.js';
 import PetVitalFields from '../../components/PetVitalFields.jsx';
 import { PET_VITAL_FIELDS, petVitalsFromRow, petVitalsPayload } from '../../config/petVitals.js';
+import { localDateKey } from '../../../../utils/localDate.js';
 
 const TABLE_FIELDS = PET_VITAL_FIELDS.filter((f) => f.short);
 
 const fmt = (d) => (d ? new Date(d).toLocaleString() : '-');
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 
 export default function VitalSignList() {
   const { toast, show } = useToast();

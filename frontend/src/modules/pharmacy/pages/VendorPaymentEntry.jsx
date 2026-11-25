@@ -6,9 +6,10 @@ import SearchPick from '../../../components/grid/SearchPick.jsx';
 import { useToast } from '../../../hooks/useToast.js';
 import { useAuth } from '../../../context/AuthContext.jsx';
 import { vendorApi, vendorBillPaymentApi } from '../api.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
 const PAY_MODES = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Card'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const money = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dateLabel = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB') : '');
 const mmyy = (iso) => (iso ? `${String(new Date(iso).getMonth() + 1).padStart(2, '0')}/${String(new Date(iso).getFullYear()).slice(2)}` : '');

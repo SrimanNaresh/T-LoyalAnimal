@@ -12,9 +12,10 @@ import ScanBillModal from './ScanBillModal.jsx';
 import { compact, likeness } from '../utils/billScan.js';
 import { itemMasterApi, purchaseOrderApi, vendorApi } from '../api.js';
 import { pRateOf, purchaseLine, purchaseTotal, round2, roundOffOf } from '../utils/purchaseCalc.js';
+import { localDateKey } from '../../../utils/localDate.js';
 
 const MAX_GST = 28;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey();
 const money = (n) => (Number(n) || 0).toFixed(2);
 const numStr = (v) => (v == null || v === '' ? '' : String(Number(v)));
 
