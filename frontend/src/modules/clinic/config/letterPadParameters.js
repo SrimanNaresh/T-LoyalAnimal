@@ -1,13 +1,26 @@
 import {
   Activity, Pill, Weight as WeightIcon, HeartPulse, Thermometer, MessageSquare, Clock, Utensils, CalendarDays, Hash, User, Cake, Phone,
   Wind, Timer, Eye, Scan, Droplet, Smile, Stethoscope, ClipboardList, StickyNote, CalendarClock, TestTube,
-  PawPrint, Dog, Users, Palette, UserRound, MapPin, Share2, Building2,
+  PawPrint, Dog, Users, Palette, UserRound, MapPin, Share2, Building2, Type,
 } from 'lucide-react';
 import { PET_VITAL_FIELDS } from './petVitals.js';
 
 export const DEFAULT_FONT_SIZE = 12;
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 28;
+
+// The letterhead is printed as one full sheet, A4 unless the template says
+// otherwise. Height / Width are in cm.
+export const A4 = { width: 21, height: 29.7 };
+export const sheetSize = (height, width) => ({
+  height: Number(height) > 0 ? Number(height) : A4.height,
+  width: Number(width) > 0 ? Number(width) : A4.width,
+});
+// A field's font size is in px *on the printed sheet*. Expressed as a share of
+// the sheet's width (cqw), it looks the same size in the editor at any screen
+// width as it does on paper.
+const PX_PER_CM = 96 / 2.54;
+export const sheetFontSize = (px, widthCm) => `${(px / (widthCm * PX_PER_CM)) * 100}cqw`;
 
 // Tailwind's build-time scanner only picks up class names that appear as
 // literal strings in the source — never interpolated (e.g. `border-${x}-200`),
@@ -55,7 +68,17 @@ const EXAM_PARAMS = [
   { type: 'LabTests', label: 'Lab Tests', icon: TestTube },
 ].map((p) => ({ ...p, ...EXAM_STYLE }));
 
+// Free text you type yourself (e.g. "Diagnosis:", "Signature"), printed as is.
+// Each placed label keeps its own text in the field's `text`.
+export const LABEL_TYPE = 'Label';
+const LABEL_PARAMS = [
+  { type: LABEL_TYPE, label: 'Text Label', group: 'Label', icon: Type,
+    paletteClass: 'border-sky-200 bg-sky-50 text-sky-700', iconClass: 'text-sky-600',
+    editBadgeClass: 'cursor-grab border-sky-300 bg-sky-100 font-semibold text-sky-800 active:cursor-grabbing' },
+];
+
 export const PARAMETER_TYPES = [
+  ...LABEL_PARAMS,
   ...VITAL_PARAMS,
   ...EXAM_PARAMS,
 

@@ -1,5 +1,4 @@
-import { PrescriptionPageSize } from './PrescriptionLetterhead.jsx';
-import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MED_FIELD_GETTERS, PATIENT_FIELD_GETTERS, EXAM_FIELD_GETTERS, fmtVitalValue } from '../config/letterPadParameters.js';
+import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MED_FIELD_GETTERS, PATIENT_FIELD_GETTERS, EXAM_FIELD_GETTERS, fmtVitalValue, sheetSize, sheetFontSize, LABEL_TYPE } from '../config/letterPadParameters.js';
 
 // One line per medicine, in the same order across every medicine column —
 // so lining Medicine Name / M-A-E-N / AF-BF / Days up as separate columns
@@ -14,6 +13,26 @@ function MedicineFieldLines({ type, items }) {
   );
 }
 
+// Prints the letterhead as exactly one sheet (A4 unless the template sets
+// another size): no page margins, the image stretched to the full sheet, and
+// the sheet pinned to the page's top-left so card padding around it on the
+// screen doesn't shift it on paper.
+export function LetterPadSheetStyle({ height, width }) {
+  const s = sheetSize(height, width);
+  return (
+    <style>{`
+      @media print {
+        @page { size: ${s.width}cm ${s.height}cm; margin: 0; }
+        .letterpad-sheet {
+          position: fixed !important; left: 0; top: 0;
+          width: ${s.width}cm !important; height: ${s.height}cm !important;
+          border: 0 !important; border-radius: 0 !important;
+        }
+      }
+    `}</style>
+  );
+}
+
 // Renders a clinic's saved Letter Pad template (letterhead image + its
 // positioned parameter fields) filled in with one patient's real data. Used
 // both by the Letter Pad Prescription builder page (Coming Up's) after
@@ -24,8 +43,10 @@ function MedicineFieldLines({ type, items }) {
 // { CaseHistory, Observation, Notes, NextVisitDate, labTests: [{ TestName }] }.
 export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, fields, patient, vitals, meds, age, rx }) {
   if (!imageData) return null;
+  const sheet = sheetSize(pageHeight, pageWidth);
 
-  const renderValue = (def) => {
+  const renderValue = (def, f) => {
+    if (def.type === LABEL_TYPE) return f.text || '';
     if (MED_FIELD_GETTERS[def.type]) return <MedicineFieldLines type={def.type} items={meds} />;
     if (EXAM_FIELD_GETTERS[def.type]) return EXAM_FIELD_GETTERS[def.type](rx);
     // Age with its unit from the pet record; the bare `age` prop is the fallback.
@@ -36,9 +57,12 @@ export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, f
 
   return (
     <>
-      <PrescriptionPageSize height={pageHeight} width={pageWidth} />
-      <div className="relative w-full overflow-hidden rounded-lg border border-ink-100 bg-white">
-        <img src={imageData} alt="Letterhead" className="block w-full select-none" draggable={false} />
+      <LetterPadSheetStyle height={pageHeight} width={pageWidth} />
+      <div
+        className="letterpad-sheet relative w-full overflow-hidden rounded-lg border border-ink-100 bg-white"
+        style={{ aspectRatio: `${sheet.width} / ${sheet.height}`, containerType: 'inline-size' }}
+      >
+        <img src={imageData} alt="Letterhead" className="absolute inset-0 h-full w-full select-none object-fill" draggable={false} />
         {(fields || []).map((f) => {
           const def = PARAMETER_TYPES.find((p) => p.type === f.type);
           if (!def) return null; // a field type from before this parameter set changed
@@ -53,9 +77,9 @@ export default function LetterPadBoundView({ imageData, pageHeight, pageWidth, f
                 // inside the image regardless of container width.
                 transform: `translate(${f.x < 15 ? '0' : f.x > 85 ? '-100%' : '-50%'}, ${f.y < 15 ? '0' : f.y > 85 ? '-100%' : '-50%'})`,
               }}
-              className="absolute max-w-[85%] text-xs text-ink-800"
+              className="absolute max-w-[85%] text-ink-800"
             >
-              <div className="whitespace-pre-line" style={{ fontSize: `${f.fontSize || DEFAULT_FONT_SIZE}px` }}>{renderValue(def)}</div>
+              <div className="whitespace-pre-line" style={{ fontSize: sheetFontSize(f.fontSize || DEFAULT_FONT_SIZE, sheet.width), fontWeight: f.bold ? 700 : 400 }}>{renderValue(def, f)}</div>
             </div>
           );
         })}

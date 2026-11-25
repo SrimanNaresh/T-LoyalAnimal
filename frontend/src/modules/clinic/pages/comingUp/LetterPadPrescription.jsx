@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, Activity, Pill, X, Save, Printer, ArrowLeft, UserCheck, GripVertical, Image as ImageIcon, User, ChevronDown, Minus, Plus, ClipboardList, AlignHorizontalSpaceAround, AlignVerticalSpaceAround } from 'lucide-react';
+import { Upload, Activity, Pill, X, Save, Printer, ArrowLeft, UserCheck, GripVertical, Image as ImageIcon, User, ChevronDown, Minus, Plus, ClipboardList, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Type, Pencil, Bold } from 'lucide-react';
 import { PageHeader, CardHeader, Spinner, EmptyState, Toast } from '../../../../components/ui.jsx';
 import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { clinicApi, confirmApi, vitalApi, prescriptionApi, patientApi } from '../../api.js';
-import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MIN_FONT_SIZE, MAX_FONT_SIZE } from '../../config/letterPadParameters.js';
+import { PARAMETER_TYPES, DEFAULT_FONT_SIZE, MIN_FONT_SIZE, MAX_FONT_SIZE, A4, sheetSize, sheetFontSize, LABEL_TYPE } from '../../config/letterPadParameters.js';
 import { localDateKey } from '../../../../utils/localDate.js';
 
 const todayStr = () => localDateKey();
@@ -17,6 +17,7 @@ const PARAMETER_GROUPS = [
   { name: 'Medicine', icon: Pill, headerClass: 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' },
   { name: 'Vital Sign', icon: Activity, headerClass: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100' },
   { name: 'Examination', icon: ClipboardList, headerClass: 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100' },
+  { name: 'Label', icon: Type, headerClass: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100' },
 ];
 
 export default function LetterPadPrescription() {
@@ -42,8 +43,8 @@ export default function LetterPadPrescription() {
     clinicApi.get()
       .then((c) => {
         setImageData(c?.PrescriptionAttachment || '');
-        setPageHeight(c?.AttachmentHeight ?? '');
-        setPageWidth(c?.AttachmentWidth ?? '');
+        setPageHeight(c?.AttachmentHeight || A4.height); // A4 unless a size was saved
+        setPageWidth(c?.AttachmentWidth || A4.width);
         try { setFields(c?.LetterPadFields ? JSON.parse(c.LetterPadFields) : []); } catch { setFields([]); }
       })
       .catch(() => show('Failed to load the saved template', 'error'))
@@ -115,6 +116,9 @@ export default function LetterPadPrescription() {
     if (data.startsWith('move:')) {
       const id = data.slice(5);
       setFields((arr) => arr.map((f) => (f.id === id ? { ...f, x, y } : f)));
+    } else if (data === LABEL_TYPE) {
+      const text = window.prompt('Label text (printed exactly as typed)', '')?.trim();
+      if (text) setFields((arr) => [...arr, { id: `${Date.now()}`, type: data, text, x, y, fontSize: DEFAULT_FONT_SIZE }]);
     } else {
       setFields((arr) => [...arr, { id: `${Date.now()}`, type: data, x, y, fontSize: DEFAULT_FONT_SIZE }]);
     }
@@ -131,10 +135,24 @@ export default function LetterPadPrescription() {
       return multi ? [...ids, id] : [id];
     });
   };
+  // Bold on/off for one field or every selected one: if any of them is not
+  // bold yet, all become bold; if all already are, all go back to normal.
+  const toggleBold = (ids) => setFields((arr) => {
+    const makeBold = arr.some((f) => ids.includes(f.id) && !f.bold);
+    return arr.map((f) => (ids.includes(f.id) ? { ...f, bold: makeBold } : f));
+  });
+
   const alignSelected = (axis) => {
     const anchor = fields.find((f) => f.id === selectedIds[0]);
     if (!anchor) return;
     setFields((arr) => arr.map((f) => (selectedIds.includes(f.id) ? { ...f, [axis]: anchor[axis] } : f)));
+  };
+
+  const editLabel = (field) => {
+    const text = window.prompt('Label text (printed exactly as typed)', field.text || '');
+    if (text == null) return; // cancelled
+    if (!text.trim()) return removeField(field.id);
+    setFields((arr) => arr.map((f) => (f.id === field.id ? { ...f, text: text.trim() } : f)));
   };
 
   const removeField = (id) => {
@@ -151,6 +169,17 @@ export default function LetterPadPrescription() {
       )
     );
   };
+
+  // Common font size for every field on the letterhead.
+  const clampFont = (n) => Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, n));
+  const fontCounts = fields.reduce((m, f) => m.set(f.fontSize || DEFAULT_FONT_SIZE, (m.get(f.fontSize || DEFAULT_FONT_SIZE) || 0) + 1), new Map());
+  const commonFont = [...fontCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? DEFAULT_FONT_SIZE; // most used size
+  const mixedFonts = fontCounts.size > 1;
+  const shiftAllFonts = (delta) =>
+    setFields((arr) => arr.map((f) => ({ ...f, fontSize: clampFont((f.fontSize || DEFAULT_FONT_SIZE) + delta) })));
+  const setAllFonts = (size) => setFields((arr) => arr.map((f) => ({ ...f, fontSize: clampFont(size) })));
+
+  const sheet = sheetSize(pageHeight, pageWidth);
 
   const saveTemplate = async () => {
     if (!imageData) return show('Upload a letterhead image first', 'error');
@@ -293,6 +322,28 @@ export default function LetterPadPrescription() {
                     <label className="label mb-1 text-[11px]">Width (cm)</label>
                     <input type="number" min="0.1" step="0.1" className="input h-9 w-28" value={pageWidth} onChange={(e) => setPageWidth(e.target.value)} placeholder="e.g. 21" />
                   </div>
+                  <button
+                    type="button"
+                    className={`btn-secondary h-9 !px-3 text-xs ${sheet.height === A4.height && sheet.width === A4.width ? '!border-brand-300 !bg-brand-50 !text-brand-700' : ''}`}
+                    onClick={() => { setPageHeight(A4.height); setPageWidth(A4.width); }}
+                    title="Set the page to A4 (29.7 × 21 cm)"
+                  >
+                    A4
+                  </button>
+
+                  {fields.length > 0 && (
+                    <div className="ml-auto">
+                      <label className="label mb-1 text-[11px]">All fields font size</label>
+                      <div className="flex h-9 items-center gap-1">
+                        <button type="button" className="btn-secondary h-9 !px-2.5" title="Make every field smaller" onClick={() => shiftAllFonts(-1)}><Minus size={14} /></button>
+                        <span className="w-16 text-center text-sm font-semibold text-ink-700">{commonFont}px{mixedFonts ? '*' : ''}</span>
+                        <button type="button" className="btn-secondary h-9 !px-2.5" title="Make every field bigger" onClick={() => shiftAllFonts(1)}><Plus size={14} /></button>
+                        {mixedFonts && (
+                          <button type="button" className="btn-ghost h-9 !px-2 text-xs" title={`Set every field to ${commonFont}px`} onClick={() => setAllFonts(commonFont)}>Same size</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -329,7 +380,12 @@ export default function LetterPadPrescription() {
                     </>
                   )}
                   {selectedIds.length > 0 && (
-                    <button type="button" className="btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setSelectedIds([])}>Clear</button>
+                    <>
+                      <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => toggleBold(selectedIds)}>
+                        <Bold size={14} /> Bold
+                      </button>
+                      <button type="button" className="btn-ghost !px-2 !py-1.5 text-xs" onClick={() => setSelectedIds([])}>Clear</button>
+                    </>
                   )}
                 </div>
                 <div
@@ -337,8 +393,11 @@ export default function LetterPadPrescription() {
                   onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setGuides({ x: null, y: null }); }}
                   onDrop={handleDrop}
                   className="relative w-full overflow-hidden rounded-lg border border-ink-100 bg-white"
+                  // Same sheet shape and font scale as the printed page, so a
+                  // field prints exactly where (and as big as) it is placed here.
+                  style={{ aspectRatio: `${sheet.width} / ${sheet.height}`, containerType: 'inline-size' }}
                 >
-                  <img src={imageData} alt="Letterhead" className="block w-full select-none" draggable={false} />
+                  <img src={imageData} alt="Letterhead" className="absolute inset-0 h-full w-full select-none object-fill" draggable={false} />
                   {guides.y != null && (
                     <div className="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-fuchsia-500" style={{ top: `${guides.y}%` }} />
                   )}
@@ -370,8 +429,23 @@ export default function LetterPadPrescription() {
                         className={`absolute flex max-w-[85%] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-sm ${def.editBadgeClass} ${isSelected ? 'ring-2 ring-fuchsia-500 ring-offset-1' : ''}`}
                       >
                         <Icon size={13} className={`mt-0.5 shrink-0 ${def.iconClass}`} />
-                        <div style={{ fontSize: `${f.fontSize || DEFAULT_FONT_SIZE}px` }}>{def.label}</div>
+                        {/* Bold shows exactly as it prints: bold or normal weight. */}
+                        <div className="whitespace-pre-line" style={{ fontSize: sheetFontSize(f.fontSize || DEFAULT_FONT_SIZE, sheet.width), fontWeight: f.bold ? 700 : 400 }}>{f.type === LABEL_TYPE ? f.text : def.label}</div>
                         <div className="no-print ml-1 flex shrink-0 items-center gap-0.5">
+                          <button
+                            type="button"
+                            className={`rounded px-1 text-[11px] font-black leading-4 ${f.bold ? 'bg-ink-800 text-white' : 'text-ink-400 hover:text-ink-700'}`}
+                            title={f.bold ? 'Bold on — click for normal' : 'Make bold'}
+                            aria-pressed={!!f.bold}
+                            onClick={() => toggleBold([f.id])}
+                          >
+                            B
+                          </button>
+                          {f.type === LABEL_TYPE && (
+                            <button type="button" className="rounded p-0.5 text-ink-400 hover:text-ink-700" title="Edit label text" onClick={() => editLabel(f)}>
+                              <Pencil size={11} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="rounded p-0.5 text-ink-400 hover:text-ink-700"
