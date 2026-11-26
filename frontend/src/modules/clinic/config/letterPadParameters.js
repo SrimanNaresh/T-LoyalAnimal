@@ -62,6 +62,7 @@ const EXAM_STYLE = {
 };
 const EXAM_PARAMS = [
   { type: 'CaseHistory', label: 'History', icon: ClipboardList },
+  { type: 'Treatment', label: 'Treatment', icon: ClipboardList },
   { type: 'Observation', label: 'Observation', icon: Eye },
   { type: 'Notes', label: 'Notes / Advice', icon: StickyNote },
   { type: 'NextVisitDate', label: 'Next Visit Date', icon: CalendarClock },
@@ -159,6 +160,7 @@ export const PATIENT_FIELD_GETTERS = {
 // { CaseHistory, Observation, Notes, NextVisitDate, labTests: [{ TestName }] }.
 export const EXAM_FIELD_GETTERS = {
   CaseHistory: (rx) => rx?.CaseHistory || '-',
+  Treatment: (rx) => rx?.Treatment || '-',
   Observation: (rx) => rx?.Observation || '-',
   Notes: (rx) => rx?.Notes || '-',
   NextVisitDate: (rx) => {

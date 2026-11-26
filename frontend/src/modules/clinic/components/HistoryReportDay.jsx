@@ -15,21 +15,21 @@ const VITAL_ROWS = [
   { label: 'Comments', col: 'Comments', long: true },
 ];
 
-const th = 'border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-600';
-const td = 'border border-slate-200 px-2.5 py-1.5 align-top text-sm text-slate-700';
-const labelTd = 'w-40 border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 align-top text-xs font-semibold text-slate-500';
+export const th = 'border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left text-xs font-semibold text-slate-600';
+export const td = 'border border-slate-200 px-2.5 py-1.5 align-top text-sm text-slate-700';
+export const labelTd = 'w-40 border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 align-top text-xs font-semibold text-slate-500';
 
-const Value = ({ v, unit }) =>
+export const Value = ({ v, unit }) =>
   blank(v) ? <span className="text-slate-300">-</span> : <span className="whitespace-pre-wrap">{v}{unit ? ` ${unit}` : ''}</span>;
 
-const SectionTitle = ({ children, right }) => (
+export const SectionTitle = ({ children, right }) => (
   <div className="mb-1.5 mt-4 flex items-center justify-between gap-2 border-b border-slate-300 pb-1 first:mt-0">
     <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{children}</h5>
     {right}
   </div>
 );
 
-function VitalTable({ vital }) {
+export function VitalTable({ vital }) {
   const short = VITAL_ROWS.filter((r) => !r.long);
   const long = VITAL_ROWS.filter((r) => r.long);
   // Short readings two pairs per row (Label | Value | Label | Value).
@@ -132,6 +132,7 @@ export default function HistoryReportDay({ dateLabel, isToday, open, onToggle, v
               <table className="w-full border-collapse">
                 <tbody>
                   <tr><td className={labelTd}>History</td><td className={td}><Value v={p.CaseHistory} /></td></tr>
+                  <tr><td className={labelTd}>Treatment</td><td className={td}><Value v={p.Treatment} /></td></tr>
                   <tr><td className={labelTd}>Observation</td><td className={td}><Value v={p.Observation} /></td></tr>
                   <tr><td className={labelTd}>Notes / Advice</td><td className={td}><Value v={p.Notes} /></td></tr>
                   <tr><td className={labelTd}>Lab Tests</td><td className={td}><Value v={p.labTests?.map((t) => t.TestName).join(', ')} /></td></tr>

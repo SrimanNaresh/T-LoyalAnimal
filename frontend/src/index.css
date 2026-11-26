@@ -260,3 +260,36 @@ body:has([data-phone-footer]) [data-fab-spacer] { display: none; }
 }
 .toast-in { animation: toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @media (prefers-reduced-motion: reduce) { .toast-in { animation: none !important; } }
+
+/* Printed prescription (Examine > Print): tight rows so the report fits on
+   one page. Only this print; Patient History on screen keeps its spacing. */
+.rx-compact td,
+.rx-compact th {
+  padding: 2px 6px !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+}
+/* label cells (w-40 in the report tables) */
+.rx-compact td.w-40 {
+  width: 18% !important;
+}
+.rx-compact h5 {
+  font-size: 10.5px !important;
+}
+.rx-compact h5,
+.rx-compact h5 + * {
+  margin-top: 0 !important;
+}
+.rx-compact div:has(> h5) {
+  margin-top: 6px !important;
+  margin-bottom: 3px !important;
+  padding-bottom: 1px !important;
+}
+.rx-compact p {
+  font-size: 11px !important;
+}
+/* Examination rows keep room for two lines (handwritten additions). */
+.rx-compact .rx-two-line td {
+  height: 3.2em;
+  vertical-align: top;
+}

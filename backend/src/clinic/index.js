@@ -11,6 +11,7 @@ import reportRoutes from './routes/reports.js';
 import confirmationRoutes from './routes/confirmation.js';
 import clinicDetailsRoutes from './routes/clinicDetails.js';
 import billingRoutes from './routes/billing.js';
+import commonBillRoutes from './routes/commonBill.js';
 import patientDocumentsRoutes from './routes/patientDocuments.js';
 import partnerPharmacyRoutes from './routes/partnerPharmacy.js';
 
@@ -34,6 +35,7 @@ router.use('/reports', reportRoutes);
 router.use('/confirmations', writesNeed(['confirm.search', 'confirm.list', 'registration.patient', DOCTOR]), confirmationRoutes);
 router.use('/clinic-details', writesNeed(['settings.clinic-master', 'coming-up.letter-pad-prescription']), clinicDetailsRoutes);
 router.use('/partner-pharmacies', writesNeed(['settings.clinic-master']), partnerPharmacyRoutes);
+router.use('/common-bills', writesNeed(['billing.common-bill']), commonBillRoutes);
 router.use('/billing', writesNeed(['billing.patient-bill']), billingRoutes);
 router.use('/patient-documents', patientDocumentsRoutes);
 router.use((req, res) => res.status(404).json({ error: 'Not found' }));

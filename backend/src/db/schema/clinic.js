@@ -105,6 +105,8 @@ IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name='NextVisitDate' AND Object_I
 -- Pet clinic: presenting history (e.g. inappetence, dull, vomiting) and doctor's observation.
 IF COL_LENGTH('dbo.Prescription','CaseHistory') IS NULL ALTER TABLE Prescription ADD CaseHistory NVARCHAR(2000) NULL;
 IF COL_LENGTH('dbo.Prescription','Observation') IS NULL ALTER TABLE Prescription ADD Observation NVARCHAR(2000) NULL;
+-- Treatment given at the visit (Examine > Observation tab, beside History).
+IF COL_LENGTH('dbo.Prescription','Treatment') IS NULL ALTER TABLE Prescription ADD Treatment NVARCHAR(2000) NULL;
 
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='PrescriptionItem' AND xtype='U')
 CREATE TABLE PrescriptionItem (
@@ -267,5 +269,46 @@ CREATE TABLE Pharmacy (
     Address     NVARCHAR(500) NULL,
     ContactNo   NVARCHAR(20) NULL,
     CreatedAt   DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+-- Billing > Bill Entry > Common Bill: fee types the user keeps in the Fee Type
+-- dropdown (Add / Edit / Delete there), and one row per bill entered.
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='FeeType' AND xtype='U')
+CREATE TABLE FeeType (
+    FeeTypeId  INT IDENTITY(1,1) PRIMARY KEY,
+    Name       NVARCHAR(100) NOT NULL,
+    CreatedAt  DATETIME NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT UQ_FeeType_Name UNIQUE (Name)
+);
+
+-- First version kept one fee per bill (FeeTypeId / Amount on CommonBill). The
+-- bill now holds many fee lines in CommonBillItem; drop the old shape only
+-- while it is still empty.
+IF EXISTS (SELECT * FROM sys.columns WHERE Name='FeeTypeId' AND Object_ID=Object_ID('CommonBill'))
+   AND NOT EXISTS (SELECT 1 FROM CommonBill)
+    DROP TABLE CommonBill;
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CommonBill' AND xtype='U')
+CREATE TABLE CommonBill (
+    CommonBillId INT IDENTITY(1,1) PRIMARY KEY,
+    PatientId    INT NOT NULL,
+    BillDate     DATE NOT NULL,
+    TotalAmount  DECIMAL(12,2) NOT NULL DEFAULT 0,
+    CreatedAt    DATETIME NOT NULL DEFAULT GETDATE(),
+    UpdatedAt    DATETIME NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT FK_CommonBill_Patient FOREIGN KEY (PatientId)
+        REFERENCES Patient(PatientId) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CommonBillItem' AND xtype='U')
+CREATE TABLE CommonBillItem (
+    CommonBillItemId INT IDENTITY(1,1) PRIMARY KEY,
+    CommonBillId     INT NOT NULL,
+    FeeTypeId        INT NOT NULL,
+    Amount           DECIMAL(10,2) NOT NULL DEFAULT 0,
+    CONSTRAINT FK_CommonBillItem_Bill FOREIGN KEY (CommonBillId)
+        REFERENCES CommonBill(CommonBillId) ON DELETE CASCADE,
+    CONSTRAINT FK_CommonBillItem_FeeType FOREIGN KEY (FeeTypeId)
+        REFERENCES FeeType(FeeTypeId)
 );
 `;

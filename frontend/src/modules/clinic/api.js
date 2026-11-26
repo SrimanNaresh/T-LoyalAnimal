@@ -75,6 +75,16 @@ export const reportApi = {
   visits: (from, to) => api.get('/reports/visits', { params: { from, to } }).then((r) => r.data),
 };
 
+export const commonBillApi = {
+  feeTypes: () => api.get('/common-bills/fee-types').then((r) => r.data),
+  addFeeType: (name) => api.post('/common-bills/fee-types', { name }).then((r) => r.data),
+  editFeeType: (id, name) => api.put(`/common-bills/fee-types/${id}`, { name }).then((r) => r.data),
+  deleteFeeType: (id) => api.delete(`/common-bills/fee-types/${id}`).then((r) => r.data),
+  list: (date) => api.get('/common-bills', { params: { date } }).then((r) => r.data),
+  create: (data) => api.post('/common-bills', data).then((r) => r.data),
+  update: (id, data) => api.put(`/common-bills/${id}`, data).then((r) => r.data),
+};
+
 export const billingApi = {
   report: (from, to) => api.get('/billing', { params: { from, to } }).then((r) => r.data),
   patients: (date) => api.get('/billing/patients', { params: { date } }).then((r) => r.data),

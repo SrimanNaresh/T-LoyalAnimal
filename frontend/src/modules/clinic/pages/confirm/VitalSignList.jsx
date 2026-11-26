@@ -103,13 +103,13 @@ export default function VitalSignList() {
         )}
       </div>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Vital Sign" size="lg">
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Vital Sign" size="xl">
         {editing && (
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-600">{editing.PatientName || `${editing.OwnerName || 'Owner'}'s pet`}</p>
             <PetVitalFields
               idPrefix="pv-edit"
-              compact
+              singleRow
               values={editing.values}
               onChange={(k, v) => setEditing((e) => ({ ...e, values: { ...e.values, [k]: v } }))}
             />

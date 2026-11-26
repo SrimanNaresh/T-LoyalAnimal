@@ -180,7 +180,7 @@ export default function VitalSign() {
               Already recorded today for this pet — editing that record instead of creating a new one.
             </p>
           )}
-          <PetVitalFields values={form} onChange={(k, v) => setForm((f) => ({ ...f, [k]: v }))} />
+          <PetVitalFields singleRow values={form} onChange={(k, v) => setForm((f) => ({ ...f, [k]: v }))} />
           <div className="mt-4">
             <label className="label">Comments</label>
             <textarea className="input" rows={3} value={form.comments} onChange={update('comments')} placeholder="Additional notes" />

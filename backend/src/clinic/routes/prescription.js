@@ -131,7 +131,7 @@ router.put('/:id', async (req, res) => {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
   try {
-    const { notes, diagnosis, caseHistory, observation, items = [], complete = false, nextVisitDate, labTestIds = [] } = req.body;
+    const { notes, diagnosis, caseHistory, observation, treatment, items = [], complete = false, nextVisitDate, labTestIds = [] } = req.body;
     const id = Number(req.params.id);
     await tx.begin();
     const updated = await new sql.Request(tx)
@@ -141,7 +141,8 @@ router.put('/:id', async (req, res) => {
       .input('nextVisitDate', sql.Date, nextVisitDate || null)
       .input('caseHistory', sql.NVarChar, caseHistory?.toString().trim().slice(0, 2000) || null)
       .input('observation', sql.NVarChar, observation?.toString().trim().slice(0, 2000) || null)
-      .query('UPDATE Prescription SET Notes=@notes, Diagnosis=@diagnosis, NextVisitDate=@nextVisitDate, CaseHistory=@caseHistory, Observation=@observation WHERE PrescriptionId=@id');
+      .input('treatment', sql.NVarChar, treatment?.toString().trim().slice(0, 2000) || null)
+      .query('UPDATE Prescription SET Notes=@notes, Diagnosis=@diagnosis, NextVisitDate=@nextVisitDate, CaseHistory=@caseHistory, Observation=@observation, Treatment=@treatment WHERE PrescriptionId=@id');
     if (!updated.rowsAffected[0]) {
       await tx.rollback();
       return res.status(404).json({ error: 'Prescription not found' });
@@ -199,7 +200,7 @@ router.post('/', async (req, res) => {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
   try {
-    const { patientId, doctorId, diagnosis, notes, caseHistory, observation, items = [], complete = false, nextVisitDate, labTestIds = [] } = req.body;
+    const { patientId, doctorId, diagnosis, notes, caseHistory, observation, treatment, items = [], complete = false, nextVisitDate, labTestIds = [] } = req.body;
     if (!patientId) return res.status(400).json({ error: 'patientId is required' });
     await tx.begin();
     const inserted = await new sql.Request(tx)
@@ -210,10 +211,11 @@ router.post('/', async (req, res) => {
       .input('nextVisitDate', sql.Date, nextVisitDate || null)
       .input('caseHistory', sql.NVarChar, caseHistory?.toString().trim().slice(0, 2000) || null)
       .input('observation', sql.NVarChar, observation?.toString().trim().slice(0, 2000) || null)
+      .input('treatment', sql.NVarChar, treatment?.toString().trim().slice(0, 2000) || null)
       .query(`
-        INSERT INTO Prescription (PatientId, DoctorId, Diagnosis, Notes, NextVisitDate, CaseHistory, Observation)
+        INSERT INTO Prescription (PatientId, DoctorId, Diagnosis, Notes, NextVisitDate, CaseHistory, Observation, Treatment)
         OUTPUT INSERTED.PrescriptionId
-        VALUES (@patientId, @doctorId, @diagnosis, @notes, @nextVisitDate, @caseHistory, @observation)
+        VALUES (@patientId, @doctorId, @diagnosis, @notes, @nextVisitDate, @caseHistory, @observation, @treatment)
       `);
     const prescriptionId = inserted.recordset[0].PrescriptionId;
     for (const it of items) {

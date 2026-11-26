@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Save, Plus, Trash2, History, Activity, Pill, ClipboardList, ChevronRight, ArrowLeft, Search, CheckCircle2, Pencil, Printer, MessageCircle, Paperclip, Eye, Download, TestTube } from 'lucide-react';
 import { PageHeader, Toast, Spinner, EmptyState, CardHeader } from '../../../../components/ui.jsx';
-import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
+import PrescriptionReportPrint from '../../components/PrescriptionReportPrint.jsx';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import PatientPicker from '../../components/PatientPicker.jsx';
 import HistoryReportDay from '../../components/HistoryReportDay.jsx';
@@ -33,8 +33,7 @@ const dateKey = (d) => (d ? localDateKey(new Date(d)) : 'unknown');
 const dateLabel = (key) => (key === 'unknown' ? 'Unknown date' : new Date(`${key}T00:00:00`).toLocaleDateString());
 const currentDateKey = () => localDateKey(new Date());
 const EXAMINE_TABS = [
-  { id: 'vitals', label: 'Current Vital Signs', icon: Activity },
-  { id: 'case', label: 'History & Observation', icon: ClipboardList },
+  { id: 'vitals', label: 'Observation', icon: Activity },
   { id: 'meds', label: 'Medications / Lab Test', icon: Pill },
   { id: 'history', label: 'Patient History', icon: History },
 ];
@@ -45,6 +44,7 @@ export default function Prescription() {
   const [selected, setSelected] = useState(location.state?.patient || null);
   const [notes, setNotes] = useState('');
   const [caseHistory, setCaseHistory] = useState('');
+  const [treatment, setTreatment] = useState('');
   const [observation, setObservation] = useState('');
   const [items, setItems] = useState([{ ...emptyItem }]);
   const [nextVisitDate, setNextVisitDate] = useState('');
@@ -132,7 +132,7 @@ export default function Prescription() {
         if (autoEditToday) {
           const todays = data.prescriptions?.find((p) => dateKey(p.CreatedAt) === currentDateKey());
           if (todays) editPrescription(todays);
-          else { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }
+          else { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setTreatment(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }
         }
       })
       .catch(() => setHistory(null))
@@ -181,6 +181,7 @@ export default function Prescription() {
     setEditingPrescription(prescription);
     setNotes(prescription.Notes || '');
     setCaseHistory(prescription.CaseHistory || '');
+    setTreatment(prescription.Treatment || '');
     setObservation(prescription.Observation || '');
     setItems(prescription.items?.length ? prescription.items.map((item) => ({
       medicineName: item.MedicineName || '',
@@ -232,13 +233,13 @@ export default function Prescription() {
   // Print binds today's details. What's on screen wins while it's being
   // entered or edited; once the form is empty (e.g. after Hold) it falls back
   // to today's saved prescription, so Print never comes out blank.
-  const formHasContent = !!editingPrescription || printMeds.length > 0 || !!caseHistory.trim() || !!observation.trim()
+  const formHasContent = !!editingPrescription || printMeds.length > 0 || !!caseHistory.trim() || !!treatment.trim() || !!observation.trim()
     || !!notes.trim() || !!nextVisitDate || selectedTestIds.length > 0;
   const todaysRx = history?.prescriptions
     ?.filter((p) => dateKey(p.CreatedAt) === currentDateKey())
     .sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt))[0] || null;
   const printRx = formHasContent
-    ? { CaseHistory: caseHistory, Observation: observation, Notes: notes, NextVisitDate: nextVisitDate, labTests: selectedTestNames.map((TestName) => ({ TestName })) }
+    ? { CaseHistory: caseHistory, Treatment: treatment, Observation: observation, Notes: notes, NextVisitDate: nextVisitDate, labTests: selectedTestNames.map((TestName) => ({ TestName })) }
     : todaysRx;
   const printItems = formHasContent ? printMeds : todaysRx?.items || [];
   // Vitals as typed on the Current Vital Signs tab (saved or not), in VitalSign column shape.
@@ -251,12 +252,7 @@ export default function Prescription() {
     setVitalEdit(todaysVitals ? petVitalsFromRow(todaysVitals) : null);
   }, [todaysVitals]);
 
-  const printPrescription = () => {
-    if (!clinic?.PrescriptionAttachment) {
-      return show("No Letter Pad template configured. Set it up under Coming Up's -> Prescription for Your Letter Pad.", 'error');
-    }
-    window.print();
-  };
+  const printPrescription = () => window.print();
 
   const deletePrescription = async (prescription) => {
     if (!confirm('Delete this prescription and its notes?')) return;
@@ -302,13 +298,13 @@ export default function Prescription() {
           duration: it.days ? `${it.days} day(s)` : '',
         }));
       if (editingPrescription) {
-        await prescriptionApi.update(editingPrescription.PrescriptionId, { notes, caseHistory, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
+        await prescriptionApi.update(editingPrescription.PrescriptionId, { notes, caseHistory, treatment, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
       } else {
-        await prescriptionApi.create({ patientId: selected.PatientId, notes, caseHistory, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
+        await prescriptionApi.create({ patientId: selected.PatientId, notes, caseHistory, treatment, observation, items: payloadItems, complete, nextVisitDate: nextVisitDate || null, labTestIds: selectedTestIds });
       }
       show(complete ? 'Prescription completed' : editingPrescription ? 'Prescription updated' : 'Prescription saved', 'success');
 
-      setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false);
+      setNotes(''); setCaseHistory(''); setObservation(''); setTreatment(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false);
       setEditingPrescription(null);
       if (complete) setSelected(null);
       loadReadyList();
@@ -562,6 +558,7 @@ export default function Prescription() {
                       <PetVitalFields
                         idPrefix="pv-rx-edit"
                         withComments
+                        singleRow
                         values={vitalEdit}
                         onChange={(k, v) => setVitalEdit((e) => ({ ...e, [k]: v }))}
                       />
@@ -570,36 +567,33 @@ export default function Prescription() {
                 ) : (
                   <p className="text-sm text-slate-400">No vital signs recorded today for this pet.</p>
                 )}
-              </div>
-            )}
-
-            {tab === 'case' && (
-              <div className="no-print card !pb-3 sm:!pb-4 grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="examine-case-history">History</label>
-                  <textarea
-                    id="examine-case-history"
-                    className="input"
-                    rows={3}
-                    maxLength={2000}
-                    value={caseHistory}
-                    onChange={(e) => setCaseHistory(e.target.value)}
-                    placeholder="e.g. Inappetence, dull, vomiting"
-                  />
+                {/* History and Treatment sit with the vitals; saved with the prescription on Hold / Completed. */}
+                <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-ink-100 pt-3 md:grid-cols-2">
+                  <div>
+                    <label className="label" htmlFor="examine-case-history">History</label>
+                    <textarea
+                      id="examine-case-history"
+                      className="input"
+                      rows={3}
+                      maxLength={2000}
+                      value={caseHistory}
+                      onChange={(e) => setCaseHistory(e.target.value)}
+                      placeholder="e.g. Inappetence, dull, vomiting"
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="examine-treatment">Treatment</label>
+                    <textarea
+                      id="examine-treatment"
+                      className="input"
+                      rows={3}
+                      maxLength={2000}
+                      value={treatment}
+                      onChange={(e) => setTreatment(e.target.value)}
+                      placeholder="e.g. Fluids, injections given"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="label" htmlFor="examine-observation">Observation</label>
-                  <textarea
-                    id="examine-observation"
-                    className="input"
-                    rows={3}
-                    maxLength={2000}
-                    value={observation}
-                    onChange={(e) => setObservation(e.target.value)}
-                    placeholder="Clinical observation"
-                  />
-                </div>
-                <p className="text-xs text-slate-400 md:col-span-2">Saved with the prescription when you click Hold or Completed.</p>
               </div>
             )}
 
@@ -652,12 +646,10 @@ export default function Prescription() {
 
             <form onSubmit={(e) => submit(e, false)} className="card !pb-3 sm:!pb-4">
               <div className="hidden print:block">
-                <LetterPadBoundView
-                  imageData={clinic?.PrescriptionAttachment}
-                  pageHeight={clinic?.AttachmentHeight}
-                  pageWidth={clinic?.AttachmentWidth}
-                  fields={letterPadFields}
-                  patient={{ PatientId: selected.PatientId, PatientName: selected.Name, MobileNo: selected.MobileNo, ...(petRecord?.PatientId === selected.PatientId ? petRecord : {}) }}
+                {/* Same report pattern as Patient History, under the letter pad header strip. */}
+                <PrescriptionReportPrint
+                  letterPadImage={clinic?.PrescriptionAttachment}
+                  patient={{ ...selected, ...(petRecord?.PatientId === selected.PatientId ? petRecord : {}) }}
                   vitals={printVitals}
                   meds={printItems}
                   age={patientAge}
@@ -861,7 +853,7 @@ export default function Prescription() {
                   <button type="button" className="btn-primary" disabled={saving} onClick={(e) => submit(e, true)}>
                     <CheckCircle2 size={16} /> Completed
                   </button>
-                  {editingPrescription && <button type="button" className="btn-ghost" disabled={saving} onClick={() => { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }}>Cancel Edit</button>}
+                  {editingPrescription && <button type="button" className="btn-ghost" disabled={saving} onClick={() => { setEditingPrescription(null); setNotes(''); setCaseHistory(''); setObservation(''); setTreatment(''); setItems([{ ...emptyItem }]); setNextVisitDate(''); setSelectedTestIds([]); setShowLabTests(false); }}>Cancel Edit</button>}
                 </div>
               </div>
             </form>
