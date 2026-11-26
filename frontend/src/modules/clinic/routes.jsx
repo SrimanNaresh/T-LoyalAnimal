@@ -29,6 +29,7 @@ const PatientRecords = lazy(() => import('./pages/reports/PatientRecords.jsx'));
 const FollowUpPatients = lazy(() => import('./pages/reports/FollowUpPatients.jsx'));
 const BillingPatientBill = lazy(() => import('./pages/billing/BillingPatientBill.jsx'));
 const BillingCommonBill = lazy(() => import('./pages/billing/BillingCommonBill.jsx'));
+const BillingCommonBillList = lazy(() => import('./pages/billing/BillingCommonBillList.jsx'));
 const BillingMonthWise = lazy(() => import('./pages/billing/BillingMonthWise.jsx'));
 const BillingCustom = lazy(() => import('./pages/billing/BillingCustom.jsx'));
 
@@ -58,6 +59,7 @@ const PAGES = [
   ['/clinic/reports/follow-up-patients', FollowUpPatients],
   ['/clinic/billing/patient-bill', BillingPatientBill],
   ['/clinic/billing/common-bill', BillingCommonBill],
+  ['/clinic/billing/common-bill-list', BillingCommonBillList],
   ['/clinic/billing/month-wise', BillingMonthWise],
   ['/clinic/billing/custom', BillingCustom],
 ];

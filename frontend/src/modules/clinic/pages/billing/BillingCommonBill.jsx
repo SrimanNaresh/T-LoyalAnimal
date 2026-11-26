@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Receipt, Save, Pencil, X, Plus, Trash2, List, Printer } from 'lucide-react';
-import { PageHeader, CardHeader, Spinner, EmptyState, Toast, Modal } from '../../../../components/ui.jsx';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Receipt, Save, X, Plus, Trash2, List, Printer } from 'lucide-react';
+import { PageHeader, CardHeader, Toast, Modal } from '../../../../components/ui.jsx';
 import SearchSelect from '../../../../components/SearchSelect.jsx';
 import FeeTypeSelect from '../../components/FeeTypeSelect.jsx';
 import CommonBillPrint, { useLetterPadHeader } from '../../components/CommonBillPrint.jsx';
@@ -20,12 +21,14 @@ const emptyForm = () => ({ id: null, patientId: '', lines: [newLine()] });
 
 export default function BillingCommonBill() {
   const { toast, show } = useToast();
-  const [date, setDate] = useState(localDateKey());
+  const navigate = useNavigate();
+  // Opened from Common Bill List's Edit: ?edit=<bill id>&date=<YYYY-MM-DD>
+  const [params] = useSearchParams();
+  const editId = Number(params.get('edit')) || null;
+  const [date, setDate] = useState(params.get('date') || localDateKey());
   const [patients, setPatients] = useState([]);
   const [feeTypes, setFeeTypes] = useState([]);
   const [form, setForm] = useState(emptyForm);
-  const [bills, setBills] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   // Fee Type Add / Edit modal: { mode: 'add' | 'edit', lineKey, feeTypeId?, name }
   const [feeModal, setFeeModal] = useState(null);
@@ -40,17 +43,10 @@ export default function BillingCommonBill() {
   const errMsg = (err, fallback) => err.response?.data?.error || fallback;
 
   const loadFeeTypes = () => commonBillApi.feeTypes().then(setFeeTypes).catch(() => setFeeTypes([]));
-  const loadBills = async (d) => {
-    setLoading(true);
-    try { setBills(await commonBillApi.list(d)); }
-    catch (err) { show(errMsg(err, 'Failed to load bills'), 'error'); }
-    finally { setLoading(false); }
-  };
 
   useEffect(() => {
     patientApi.list({}).then(setPatients).catch(() => setPatients([]));
     loadFeeTypes();
-    loadBills(date);
     clinicApi.get().then((c) => setLetterPad(c?.PrescriptionAttachment || '')).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -79,7 +75,7 @@ export default function BillingCommonBill() {
     setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((l) => l.key !== key) : [newLine()] }));
   const lineTotal = form.lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
 
-  const cancel = () => setForm(emptyForm());
+  const cancel = () => (form.id ? navigate('/clinic/billing/common-bill-list') : setForm(emptyForm()));
 
   const save = async (e) => {
     e.preventDefault();
@@ -99,9 +95,13 @@ export default function BillingCommonBill() {
       };
       if (form.id) await commonBillApi.update(form.id, data);
       else await commonBillApi.create(data);
-      show(form.id ? 'Bill updated' : 'Bill saved', 'success');
+      if (form.id) {
+        // An edit came from the list: go back to it.
+        navigate('/clinic/billing/common-bill-list');
+        return;
+      }
+      show('Bill saved', 'success');
       setForm(emptyForm());
-      loadBills(date);
     } catch (err) {
       show(errMsg(err, 'Save failed'), 'error');
     } finally {
@@ -116,15 +116,6 @@ export default function BillingCommonBill() {
     window.addEventListener('afterprint', done);
     return () => { clearTimeout(t); window.removeEventListener('afterprint', done); };
   }, [printBill]);
-
-  const printSaved = (b) => setPrintBill({
-    billNo: b.CommonBillId,
-    date: localDateKey(new Date(b.BillDate)),
-    patientName: b.PatientName,
-    ownerName: b.OwnerName,
-    mobileNo: b.MobileNo,
-    items: b.items.map((it) => ({ name: it.FeeTypeName, amount: it.Amount })),
-  });
 
   // Print what is on the form now (saved or not).
   const printForm = () => {
@@ -142,14 +133,19 @@ export default function BillingCommonBill() {
     });
   };
 
-  const edit = (b) => {
-    setForm({
-      id: b.CommonBillId,
-      patientId: b.PatientId,
-      lines: b.items.length ? b.items.map((it) => newLine(it.FeeTypeId, Number(it.Amount))) : [newLine()],
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (!editId) return;
+    commonBillApi.list(date).then((list) => {
+      const b = list.find((x) => x.CommonBillId === editId);
+      if (!b) { show('Bill not found', 'error'); return; }
+      setForm({
+        id: b.CommonBillId,
+        patientId: b.PatientId,
+        lines: b.items.length ? b.items.map((it) => newLine(it.FeeTypeId, Number(it.Amount))) : [newLine()],
+      });
+    }).catch((err) => show(errMsg(err, 'Failed to load bill'), 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   const savePatient = async (e) => {
     e.preventDefault();
@@ -182,7 +178,6 @@ export default function BillingCommonBill() {
       await loadFeeTypes();
       setLine(feeModal.lineKey, 'feeTypeId', String(saved.FeeTypeId));
       show(feeModal.mode === 'edit' ? 'Fee type updated' : 'Fee type added', 'success');
-      if (feeModal.mode === 'edit') loadBills(date);
       setFeeModal(null);
     } catch (err) {
       show(errMsg(err, 'Could not save fee type'), 'error');
@@ -201,12 +196,17 @@ export default function BillingCommonBill() {
     }
   };
 
-  const dayTotal = bills.reduce((s, b) => s + Number(b.TotalAmount || 0), 0);
-
   return (
     <div>
       <div className={printBill ? 'print:hidden' : ''}>
-      <PageHeader title="Billing - Common Bill" />
+      <PageHeader
+        title="Billing - Common Bill"
+        actions={(
+          <button type="button" className="btn-secondary" onClick={() => navigate('/clinic/billing/common-bill-list')}>
+            <List size={16} /> Bill List
+          </button>
+        )}
+      />
 
       <form className="card" onSubmit={save}>
         <CardHeader
@@ -219,7 +219,7 @@ export default function BillingCommonBill() {
             <label className="label">Date</label>
             <input
               type="date" className="input" value={date}
-              onChange={(e) => { setDate(e.target.value); if (e.target.value) loadBills(e.target.value); }}
+              onChange={(e) => setDate(e.target.value)}
             />
           </div>
           <div className="md:col-span-2">
@@ -309,63 +309,6 @@ export default function BillingCommonBill() {
           </button>
         </div>
       </form>
-
-      <div className="card mt-5">
-        <CardHeader icon={List} title="Common Bills" subtitle={new Date(`${date}T00:00:00`).toLocaleDateString()} />
-        {loading ? <Spinner /> : bills.length === 0 ? (
-          <EmptyState message="No common bills for this date." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-13">
-              <thead>
-                <tr className="table-head">
-                  <th className="rounded-l-lg px-2.5 py-1.5">#</th>
-                  <th className="px-2.5 py-1.5">Patient</th>
-                  <th className="px-2.5 py-1.5">Mobile</th>
-                  <th className="px-2.5 py-1.5">Fees</th>
-                  <th className="px-2.5 py-1.5 text-right">Total</th>
-                  <th className="rounded-r-lg px-2.5 py-1.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bills.map((b, i) => (
-                  <tr key={b.CommonBillId} className={`table-row align-top ${form.id === b.CommonBillId ? 'bg-amber-50' : ''}`}>
-                    <td className="px-2.5 py-1 text-slate-500">{bills.length - i}</td>
-                    <td className="px-2.5 py-1 font-medium text-slate-700">{b.PatientName || `${b.OwnerName || 'Owner'}'s pet`}</td>
-                    <td className="px-2.5 py-1 text-slate-500">{b.MobileNo || '-'}</td>
-                    <td className="px-2.5 py-1">
-                      {b.items.map((it, j) => (
-                        <div key={j} className="flex justify-between gap-4">
-                          <span>{it.FeeTypeName}</span>
-                          <span className="text-slate-500">{fmtMoney(it.Amount)}</span>
-                        </div>
-                      ))}
-                    </td>
-                    <td className="px-2.5 py-1 text-right font-semibold text-slate-800">{fmtMoney(b.TotalAmount)}</td>
-                    <td className="px-2.5 py-1">
-                      <div className="flex justify-end gap-1">
-                        <button type="button" className="btn-ghost !p-1.5 text-amber-600 hover:bg-amber-50" title="Edit" onClick={() => edit(b)}>
-                          <Pencil size={15} />
-                        </button>
-                        <button type="button" className="btn-ghost !p-1.5 text-teal-600 hover:bg-teal-50" title="Print" onClick={() => printSaved(b)}>
-                          <Printer size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-ink-200 text-sm font-semibold text-slate-800">
-                  <td className="px-2.5 py-1" colSpan={4}>Total ({bills.length} bills)</td>
-                  <td className="px-2.5 py-1 text-right">{fmtMoney(dayTotal)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
 
       <Modal open={!!feeModal} onClose={() => setFeeModal(null)} title={feeModal?.mode === 'edit' ? 'Edit Fee Type' : 'Add Fee Type'}>
         {feeModal && (

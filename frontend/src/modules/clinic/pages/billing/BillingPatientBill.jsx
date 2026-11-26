@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Printer, Calendar, Save, FileText } from 'lucide-react';
 import { PageHeader, CardHeader, Spinner, EmptyState, Toast } from '../../../../components/ui.jsx';
 import { PrescriptionHeader, PrescriptionFooter, PrescriptionPageSize } from '../../components/PrescriptionLetterhead.jsx';
-import LetterPadBoundView from '../../components/LetterPadBoundView.jsx';
+import PrescriptionReportPrint from '../../components/PrescriptionReportPrint.jsx';
 import { useToast } from '../../../../hooks/useToast.js';
 import { billingApi, clinicApi, employeeApi, patientApi, prescriptionApi, vitalApi } from '../../api.js';
 import { localDateKey } from '../../../../utils/localDate.js';
@@ -120,14 +120,9 @@ export default function BillingPatientBill() {
     return () => window.removeEventListener('afterprint', onAfterPrint);
   }, []);
 
-  // Print that day's prescription for a patient on the clinic's saved Letter
-  // Pad template (Coming Up's -> Prescription for Your Letter Pad), so this
-  // print matches whatever letterhead layout was built there.
+  // Print that day's prescription for a patient, laid out exactly like
+  // Examine > Print (letter pad header, vitals, examination, medicines).
   const printPrescriptionFor = async (row) => {
-    if (!clinic?.PrescriptionAttachment) {
-      show("No Letter Pad template configured. Set it up under Coming Up's -> Prescription for Your Letter Pad.", 'error');
-      return;
-    }
     setPrintingRxId(row.patientId);
     try {
       const [history, vitals, pet] = await Promise.all([
@@ -336,16 +331,15 @@ export default function BillingPatientBill() {
 
       {printRx && (
         <div className="hidden print:block">
-          <LetterPadBoundView
-            imageData={clinic?.PrescriptionAttachment}
-            pageHeight={clinic?.AttachmentHeight}
-            pageWidth={clinic?.AttachmentWidth}
-            fields={letterPadFields}
-            patient={printRx.patient}
+          {/* Same print as Examine > Print. */}
+          <PrescriptionReportPrint
+            letterPadImage={clinic?.PrescriptionAttachment}
+            patient={{ Name: printRx.patient.PatientName, ...printRx.patient }}
             vitals={printRx.vitals}
             meds={printRx.meds}
             age={printRx.age}
             rx={printRx.rx}
+            date={date}
           />
         </div>
       )}

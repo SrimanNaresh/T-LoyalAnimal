@@ -14,7 +14,8 @@ const fmtDate = (v) => {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB');
 };
 
-export default function PrescriptionReportPrint({ letterPadImage, patient, age, vitals, rx, meds = [] }) {
+// date: the visit day (YYYY-MM-DD); today when not given.
+export default function PrescriptionReportPrint({ letterPadImage, patient, age, vitals, rx, meds = [], date }) {
   const headerImage = useLetterPadHeader(letterPadImage, HEADER_PRESCRIPTION, DOCTOR_NAME_BOXES);
   const petName = patient?.Name || `${patient?.OwnerName || 'Owner'}'s pet`;
   const species = [patient?.Species, patient?.Breed].filter(Boolean).join(' / ');
@@ -28,7 +29,7 @@ export default function PrescriptionReportPrint({ letterPadImage, patient, age, 
         <tbody>
           <tr>
             <td className={labelTd}>Patient Name</td><td className={td}>{petName}</td>
-            <td className={labelTd}>Date</td><td className={td}>{new Date().toLocaleDateString('en-GB')}</td>
+            <td className={labelTd}>Date</td><td className={td}>{date ? fmtDate(date) : new Date().toLocaleDateString('en-GB')}</td>
           </tr>
           <tr>
             <td className={labelTd}>Owner Name</td><td className={td}><Value v={patient?.OwnerName} /></td>

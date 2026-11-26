@@ -44,6 +44,7 @@ export const BILLING_MENU = [
     submenu: [
       { key: 'clinic.billing.patient-bill', label: 'Patient Bill', to: '/clinic/billing/patient-bill' },
       { key: 'clinic.billing.common-bill', label: 'Common Bill', to: '/clinic/billing/common-bill' },
+      { key: 'clinic.billing.common-bill-list', label: 'Common Bill List', to: '/clinic/billing/common-bill-list' },
     ],
   },
   {

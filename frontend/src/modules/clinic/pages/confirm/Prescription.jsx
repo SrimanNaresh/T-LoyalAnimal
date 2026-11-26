@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Save, Plus, Trash2, History, Activity, Pill, ClipboardList, ChevronRight, ArrowLeft, Search, CheckCircle2, Pencil, Printer, MessageCircle, Paperclip, Eye, Download, TestTube } from 'lucide-react';
 import { PageHeader, Toast, Spinner, EmptyState, CardHeader } from '../../../../components/ui.jsx';
 import PrescriptionReportPrint from '../../components/PrescriptionReportPrint.jsx';
+import NumberedTextarea from '../../../../components/NumberedTextarea.jsx';
 import DocumentPreviewModal from '../../components/DocumentPreviewModal.jsx';
 import PatientPicker from '../../components/PatientPicker.jsx';
 import HistoryReportDay from '../../components/HistoryReportDay.jsx';
@@ -583,14 +584,15 @@ export default function Prescription() {
                   </div>
                   <div>
                     <label className="label" htmlFor="examine-treatment">Treatment</label>
-                    <textarea
+                    {/* Each line is numbered 1. 2. 3. as you type */}
+                    <NumberedTextarea
                       id="examine-treatment"
                       className="input"
                       rows={3}
                       maxLength={2000}
                       value={treatment}
-                      onChange={(e) => setTreatment(e.target.value)}
-                      placeholder="e.g. Fluids, injections given"
+                      onChange={setTreatment}
+                      placeholder="One treatment per line (numbered automatically)"
                     />
                   </div>
                 </div>
