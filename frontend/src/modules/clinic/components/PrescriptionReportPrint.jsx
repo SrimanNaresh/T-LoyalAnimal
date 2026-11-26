@@ -1,4 +1,4 @@
-import { useLetterPadHeader, HEADER_PRESCRIPTION } from './CommonBillPrint.jsx';
+import { useLetterPadHeader, HEADER_PRESCRIPTION, DOCTOR_NAME_BOXES } from './CommonBillPrint.jsx';
 import { VitalTable, SectionTitle, Value, th, td, labelTd } from './HistoryReportDay.jsx';
 
 // Printed prescription in the same report pattern as Patient History:
@@ -15,7 +15,7 @@ const fmtDate = (v) => {
 };
 
 export default function PrescriptionReportPrint({ letterPadImage, patient, age, vitals, rx, meds = [] }) {
-  const headerImage = useLetterPadHeader(letterPadImage, HEADER_PRESCRIPTION);
+  const headerImage = useLetterPadHeader(letterPadImage, HEADER_PRESCRIPTION, DOCTOR_NAME_BOXES);
   const petName = patient?.Name || `${patient?.OwnerName || 'Owner'}'s pet`;
   const species = [patient?.Species, patient?.Breed].filter(Boolean).join(' / ');
 
